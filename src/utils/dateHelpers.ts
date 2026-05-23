@@ -1,6 +1,6 @@
 export const MONTH_NAMES = [
-  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ] as const
 
 export const WEEKDAYS_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'] as const
@@ -8,7 +8,7 @@ export const WEEKDAYS_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'] as const
 export function formatMonth(ym: string): string {
   const [y, m] = ym.split('-')
   const idx = parseInt(m, 10) - 1
-  return `${MONTH_NAMES[idx]} ${y}`
+  return `${MONTH_NAMES[idx]}`
 }
 
 export function monthLabel(monthIndex: number): string {
