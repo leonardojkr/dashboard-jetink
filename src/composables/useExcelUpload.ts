@@ -20,6 +20,7 @@ export function useExcelUpload() {
       }
       filtrosStore.limpar()
       atendimentosStore.setAtendimentos(atendimentos, file.name)
+      filtrosStore.ajustarParaDados(atendimentos)
     } catch (e) {
       erro.value = (e as Error).message ?? 'Falha ao processar arquivo'
     } finally {
