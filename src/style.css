@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'DM Sans', -apple-system, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, Consolas, monospace;
+
+  --color-bg-deep: #06080F;
+  --color-bg-card: #12161F;
+  --color-bg-card-hover: #181D29;
+  --color-bg-elevated: #1A1F2E;
+
+  --color-border: #1E2433;
+  --color-border-light: #2A3044;
+
+  --color-text-primary: #F0F2F8;
+  --color-text-secondary: #8B92A8;
+  --color-text-muted: #555D75;
+
+  --color-accent: #6C5CE7;
+  --color-accent-light: #A29BFE;
+
+  --color-jet-green: #00D68F;
+  --color-jet-blue: #4DA8FF;
+  --color-jet-orange: #FFA44F;
+  --color-jet-red: #FF6B7A;
+  --color-jet-cyan: #4DD9E8;
+  --color-jet-yellow: #FEDD49;
+  --color-jet-pink: #FF79C6;
+
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+  --shadow-accent: 0 0 40px rgba(108, 92, 231, 0.25);
+
+  --radius-card: 14px;
+  --radius-sm: 8px;
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  src: local('DM Sans');
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html,
+body,
+#app {
+  min-height: 100vh;
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-bg-deep);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(108, 92, 231, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(0, 214, 143, 0.03) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-deep);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-light);
+  border-radius: 3px;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-fade-up { animation: fade-up 0.5s ease both; }
+.animate-pulse-dot { animation: pulse-dot 2s ease infinite; }
+
+@media print {
+  @page { size: A4 landscape; margin: 8mm 10mm; }
+  * { transition: none !important; animation: none !important; }
+  body { background: white !important; color: #1a1a2e !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body::before { display: none !important; }
+  [data-print="hide"] { display: none !important; }
+  [data-print="show"] { display: flex !important; }
+}

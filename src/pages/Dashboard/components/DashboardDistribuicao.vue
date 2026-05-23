@@ -1,0 +1,21 @@
+<script setup lang="ts">
+import BaseCard from '@/components/ui/BaseCard.vue'
+import HBarList from '@/components/shared/HBarList.vue'
+import { useDistribuicao } from '@/composables/useDistribuicao'
+
+const { programas, impressoras, estados } = useDistribuicao(3)
+</script>
+
+<template>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-7">
+    <BaseCard title="Programas" class="animate-fade-up">
+      <HBarList :items="programas" tone="accent" />
+    </BaseCard>
+    <BaseCard title="Impressoras" class="animate-fade-up">
+      <HBarList :items="impressoras" tone="cyan" />
+    </BaseCard>
+    <BaseCard title="Estados" class="animate-fade-up">
+      <HBarList :items="estados" tone="green" />
+    </BaseCard>
+  </div>
+</template>
