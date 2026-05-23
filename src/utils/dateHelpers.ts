@@ -6,7 +6,7 @@ export const MONTH_NAMES = [
 export const WEEKDAYS_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'] as const
 
 export function formatMonth(ym: string): string {
-  const [y, m] = ym.split('-')
+  const [, m] = ym.split('-')
   const idx = parseInt(m, 10) - 1
   return `${MONTH_NAMES[idx]}`
 }
