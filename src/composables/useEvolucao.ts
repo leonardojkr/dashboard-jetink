@@ -157,13 +157,13 @@ function buildAllMonthsBars(all: Atendimento[], status: StatusFiltro): Evolution
         ...(baseTheme().tooltip as object),
         formatter: makeTooltipFormatter(statusToLabel(status)),
       },
-      grid: { left: 40, right: 12, top: 16, bottom: hasMultipleYears ? 68 : 52, containLabel: false },
-      legend: { textStyle: { color: '#8B92A8' }, bottom: 4 },
+      grid: { left: 40, right: 12, top: 16, bottom: hasMultipleYears ? 92 : 60, containLabel: false },
+      legend: { textStyle: { color: '#8B92A8' }, bottom: 0 },
       xAxis: {
         type: 'category',
         data: labels,
         axisLine: { lineStyle: { color: '#2A3044' } },
-        axisLabel: { color: '#8B92A8', rotate: hasMultipleYears ? 40 : 0 },
+        axisLabel: { color: '#8B92A8', rotate: hasMultipleYears ? 40 : 0, interval: 0 },
         boundaryGap: false,
       },
       yAxis: {
@@ -240,12 +240,13 @@ function buildYearLine(all: Atendimento[], year: string, status: StatusFiltro): 
         ...(baseTheme().tooltip as object),
         formatter: makeTooltipFormatter(statusToLabel(status)),
       },
-      legend: { textStyle: { color: '#8B92A8' }, bottom: 4 },
+      grid: { left: 40, right: 12, top: 16, bottom: 72, containLabel: false },
+      legend: { textStyle: { color: '#8B92A8' }, bottom: 0 },
       xAxis: {
         type: 'category',
         data: [...MONTH_NAMES],
         axisLine: { lineStyle: { color: '#2A3044' } },
-        axisLabel: { color: '#8B92A8' },
+        axisLabel: { color: '#8B92A8', rotate: 30, interval: 0 },
         boundaryGap: false,
       },
       yAxis: {
@@ -306,7 +307,7 @@ function buildBarComparison(all: Atendimento[], year: string, ym: string, status
     hasData: cur.hasData || prev.hasData,
     option: {
       ...baseTheme(),
-      legend: { textStyle: { color: '#8B92A8' }, bottom: 4 },
+      legend: { textStyle: { color: '#8B92A8' }, bottom: 0 },
       xAxis: {
         type: 'category',
         data: labels,
