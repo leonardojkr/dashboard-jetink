@@ -8,6 +8,8 @@ export interface AtendimentoExcelRow {
   Estado?: string
   Programa?: string
   Impressora?: string
+  'Estado Revenda'?: string
+  'Estado Revendedor'?: string
   [key: string]: unknown
 }
 
@@ -22,6 +24,8 @@ export interface Atendimento {
   estado: string
   programa: string
   impressora: string
+  estadoUf?: string
+  estadoNome?: string
 }
 
 export interface AtendimentoFiltro {

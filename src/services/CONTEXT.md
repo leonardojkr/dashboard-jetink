@@ -1,67 +1,67 @@
 # CONTEXT — services
 
-Boundary de IO. Único fluxo de entrada externa: leitura de `.xlsx`.
+Boundary de IO. Único ponto de entrada de dados externos no sistema.
 
 ## Fluxo
 
 ```
 File (do <input type=file> ou drop)
-  → readArrayBuffer (FileReader, Promise wrapper)
+  → readArrayBuffer(file)          ← FileReader, Promise wrapper
   → xlsx.read(uint8, { type: 'array', cellDates: true })
-  → workbook.SheetNames[0] (APENAS primeira sheet)
+  → workbook.SheetNames[0]         ← APENAS primeira aba
   → utils.sheet_to_json<AtendimentoExcelRow>(sheet)
-  → mapExcelRows (utils/excelMapper)
+  → mapExcelRows(rows)             ← em utils/excelMapper.ts
   → Atendimento[]
 ```
 
-## Contrato Excel (rígido)
-
-**Colunas exigidas pelo header da primeira sheet:**
+## Contrato Excel — colunas da primeira aba
 
 | Coluna | Tipo esperado | Comportamento se ausente/inválido |
 |---|---|---|
 | `Data` | Date / number serial / string parseável | **Linha descartada silenciosamente** |
-| `Status` | string contendo "rec" → Recorrente; resto → Novo | Vira `Novo` (default) |
+| `Status` | string com prefixo "rec" → Recorrente | Default → `'Novo'` |
 | `Revendedor` | string | Vira `''` |
-| `Estado` | string (UF ou nome — sistema não impõe) | Vira `''` |
+| `Estado` | string (texto livre) | Vira `''` |
 | `Programa` | string | Vira `''` |
 | `Impressora` | string | Vira `''` |
+| `Estado Revenda` | string UF (ex: "SP") | `estadoUf`/`estadoNome` ficam `undefined` |
 
-Strings `'--'` viram `''` (sentinel de "sem dado"). Definido em `excelMapper.cleanText`.
+Strings `'--'` viram `''` via `cleanText`. Colunas ausentes também viram `''` (ou `undefined` para `Estado Revenda`).
 
-## Invariantes do parsing
+## Invariantes
 
-1. **Apenas a primeira sheet é lida.** `workbook.SheetNames[0]`. Sheets adicionais são ignoradas. Se a planilha não tem aba → erro `'Planilha sem abas'`.
-2. **`cellDates: true`** é obrigatório no `xlsx.read`. Sem isso, `Data` vem como número serial Excel e o parseDate falha.
-3. **`parseDate`** aceita: `Date`, número (timestamp ou serial Excel já convertido), string parseável por `new Date()`. Inválido → linha descartada.
-4. **`parseStatus`** é case-insensitive e checa **prefixo** `"rec"`. Aceita "Rec", "Recorrente", "RECORRENTE", "recurring" (sim, qualquer coisa começando com rec). Default → `Novo`.
-5. **Campos derivados** (`iso`, `ym`, `year`, `dow`) são computados **uma única vez** aqui. Não recalcular em composables.
-6. **Linhas inválidas são descartadas silenciosamente.** `mapExcelRows` apenas omite. `useExcelUpload` joga erro só se zero linhas válidas (mensagem "A planilha não contém registros válidos.").
+1. **`cellDates: true` é obrigatório** em `xlsx.read`. Sem isso, `Data` chega como número serial e `parseDate` falha.
+2. **Apenas a primeira aba é lida**: `workbook.SheetNames[0]`. Abas adicionais são ignoradas. Sem abas → lança `'Planilha sem abas'`.
+3. **Linhas sem `Data` válida são descartadas silenciosamente**. `mapExcelRow` retorna `null`; `mapExcelRows` omite.
+4. **`mapExcelRows` é síncrono**. Não introduzir `await` no loop.
+5. **Sem tratamento de linha inválida**: erros de parse por linha não são capturados — a linha é descartada. Só lança exceção no nível do arquivo.
+6. **Zero linhas válidas**: não lança o service — é `useExcelUpload` que detecta e lança `'A planilha não contém registros válidos.'`.
 
-## Riscos / dívida
+## Responsabilidades do service
 
-- **Sem contagem de linhas descartadas.** Usuário sobe planilha com 1000 linhas, 200 inválidas, vê 800 sem aviso. **Dívida UX.** (Roadmap em AI_CONTEXT §16, prio P0.)
-- **Sem validação de tamanho.** Arquivo de 50MB roda parsing na thread principal — UI congela.
-- **Sem validação de schema.** Se as colunas vierem em inglês ("Date" em vez de "Data"), todas linhas viram inválidas (sem data) → erro genérico.
-- **`xlsx` library tem CVEs históricos.** Versão 0.18.5 é antiga. Atualizar exige cuidado (algumas versões mudaram nome de export).
-- **`sheet_to_json` ignora linhas vazias por padrão** mas tipos numéricos esquisitos (formula errors, datas malformadas) podem virar `undefined`/`NaN`.
+- Leitura do File via FileReader
+- Parse do Excel via `xlsx`
+- Delegação do mapeamento a `mapExcelRows`
 
-## Quando mexer aqui
+**Não faz**: lógica de negócio, filtros, agregações, acesso a stores ou composables.
 
-- **Mudar nome de coluna do Excel** → atualizar `AtendimentoExcelRow` (em `types/Atendimento.ts`) E `mapExcelRow` (em `utils/excelMapper.ts`). O service em si não muda.
-- **Adicionar nova coluna** → mesmo combo. Adicionar campo em `Atendimento`, em `AtendimentoExcelRow`, e mapear em `mapExcelRow`.
-- **Suportar múltiplas sheets** → mudança grande. Hoje só primeira é lida. Decidir produto antes.
-- **Adicionar fonte alternativa (CSV, API)** → criar serviço irmão (`atendimentoServiceCsv.ts`) ou polimorfizar atrás de uma interface comum.
+## Riscos
 
-## Anti-patterns a evitar
+- **Sem validação de tamanho**: arquivo grande executa parsing na thread principal → UI congela.
+- **Sem validação de schema**: colunas em inglês ("Date" em vez de "Data") → todas linhas descartadas → erro genérico "sem registros válidos".
+- **Sem contagem de linhas descartadas**: planilha com linhas inválidas silencia o descarte.
+- **`xlsx` 0.18.5** tem CVEs históricos. Atualizar exige verificar nomes de export (algumas versões mudaram).
 
-- Adicionar lógica de negócio aqui. Service é fronteira **pura** de IO + parse. Regras (filtragem, agregação) vão em composables.
-- Throw em parsing por linha. O contrato é: ignorar linha ruim, não derrubar lote.
-- Logar `console.error` no parse. Erros sobem como `Error` jogado, capturados por `useExcelUpload`.
-- Importar Pinia/composables aqui. Service não sabe que estado existe.
+## Quando modificar
 
-## Para IA agents
+- **Renomear coluna Excel** → atualizar `AtendimentoExcelRow` (em `types/Atendimento.ts`) E `mapExcelRow` (em `utils/excelMapper.ts`). O service não muda.
+- **Adicionar coluna** → mesmo combo. Adicionar campo em `Atendimento`, em `AtendimentoExcelRow`, mapear em `mapExcelRow`.
+- **Suportar múltiplas abas** → mudança grande. Hoje só a primeira é lida. Decisão de produto antes.
+- **Adicionar fonte alternativa (CSV, API)** → criar serviço irmão ou polimorfizar atrás de interface.
 
-- Não trocar `xlsx` por outra lib sem checar todos os call sites e o cellDates behaviour.
-- Não mudar `parseStatus` para regex/lookup table sem confirmar que "Rec...", "rec...", "REC..." continuam funcionando — é a única lógica de classificação de status no sistema.
-- Não introduzir `await` no laço de `mapExcelRows`. Hoje é síncrono — preserva.
+## Proibições
+
+- Não adicionar lógica de negócio aqui.
+- Não usar `console.error` para erros de parse — erros sobem como `Error` capturado por `useExcelUpload`.
+- Não importar Pinia, composables ou stores.
+- Não trocar `xlsx` por outra lib sem checar todos os call sites e o comportamento de `cellDates`.

@@ -1,227 +1,299 @@
 # AI_CONTEXT — dashboard-jetink
 
-Contexto arquitetural denso para agentes de IA e mantenedores. Lê isso antes de tocar qualquer coisa.
+Contexto arquitetural operacional. Reflete o estado atual do código. Leia antes de qualquer modificação.
 
 ---
 
 ## 1. Natureza do sistema
 
-- SPA client-side **100% no navegador**. Sem backend, sem API, sem banco, sem auth.
-- Fonte de dados única: planilha `.xlsx` que o usuário faz upload manualmente.
-- Estado vive em memória (Pinia). **Reload → perde tudo.** Não há persistência (nem localStorage).
-- Domínio único: dashboard de "atendimentos técnicos" da JETINK (status `Novo` / `Recorrente`).
-- Não é multi-tenant, não tem usuários, não tem permissões. Single-user, single-session.
+SPA 100% client-side. Sem backend, sem API, sem persistência.
 
-## 2. Stack real (versões em `package.json`)
+- **Única fonte de dados**: arquivo `.xlsx` carregado pelo usuário via `<input type="file">` ou drag-and-drop
+- **Ciclo de vida de dados**: upload → parse → memória Pinia → computed → UI. Reload = reset total
+- **Única feature**: Dashboard de atendimentos técnicos JETINK
 
-| Camada | Tech |
-|---|---|
-| UI | Vue 3.5 (`<script setup>`, Composition API) |
-| Build | Vite 8 + `@vitejs/plugin-vue` 6 |
-| Linguagem | TypeScript ~6.0 (strict via `vue-tsc`, `noUnusedLocals`, `noUnusedParameters`, `erasableSyntaxOnly`) |
-| Estado | Pinia 3 (stores **composition-style**, não options-style) |
-| Routing | vue-router 4 (`createWebHistory`) |
-| Estilo | **Tailwind v4** via `@tailwindcss/vite`. **Sem `tailwind.config.js`** — tema fica em `src/style.css` no bloco `@theme`. |
-| Charts | `echarts` 6 (tree-shaken) + `vue-echarts` 8 registrado globalmente como `<VChart>` em `main.ts` |
-| Excel | `xlsx` 0.18 (SheetJS, parsing client-side) |
-| Path alias | `@/*` → `./src/*` (definido em `vite.config.ts` E `tsconfig.app.json` — manter os dois sincronizados) |
+---
 
-Não existe: testes, lint config (eslint/prettier), CI, env vars, Docker, prerender/SSR.
+## 2. Stack (versões exatas do package.json)
+
+| Dependência | Versão | Padrão de uso |
+|---|---|---|
+| vue | ^3.5.34 | `<script setup>` + TypeScript, Composition API |
+| pinia | ^3.0.4 | composition-style stores (`defineStore(() => {})`) |
+| echarts | ^6.1.0 | tree-shaken via `use([...])` em `BaseChart.vue` |
+| vue-echarts | ^8.0.1 | `VChart` global em `main.ts` |
+| vue-router | ^4.6.4 | `createWebHistory`, rota única `/` |
+| tailwindcss | ^4.3.0 | tokens via `@theme` em `src/style.css`. Sem `tailwind.config.js` |
+| @tailwindcss/vite | ^4.3.0 | plugin Vite para Tailwind v4 |
+| xlsx | ^0.18.5 | SheetJS, parse client-side, `cellDates: true` obrigatório |
+| typescript | ~6.0.2 | strict mode |
+| vite | ^8.0.12 | bundler |
+
+---
 
 ## 3. Arquitetura
 
-**Modular feature-based + camadas**, monolítica frontend. Estrutura:
+### Estrutura de pastas
 
 ```
 src/
-  pages/Dashboard/         ← única feature; page + componentes feature-scoped
+  assets/
+    maps/
+      brazil-states.json     ← GeoJSON IBGE qualidade mínima (97 KB, 27 estados)
   components/
-    ui/                    ← primitivos (Base*)
-    shared/                ← reuso cross-feature (FileUpload, KpiCard, ...)
-  composables/             ← view-model: derivações + opções ECharts
-  stores/                  ← fonte da verdade (Pinia)
-  services/                ← IO (Excel)
-  utils/                   ← funções puras (dateHelpers, grouping, excelMapper)
-  types/                   ← contratos de domínio
-  layouts/                 ← shell de rotas
-  router/                  ← config vue-router
-  style.css                ← tema Tailwind v4 (@theme) + animações + print rules
-  main.ts                  ← bootstrap
+    shared/                  ← componentes reutilizáveis com props (KpiCard, HBarList, RankingList, EmptyState, FileUpload)
+    ui/                      ← primitivos (BaseChart, BaseCard, BaseButton, BaseSelect, BaseTabs)
+  composables/               ← view-model layer (sem side effects, exceto useExcelUpload)
+  pages/
+    Dashboard/
+      DashboardPage.vue
+      components/            ← Dashboard<X>.vue, cada um consome 1 composable
+  router/
+  services/                  ← boundary de IO (atendimentoService.ts)
+  stores/                    ← fonte de verdade (Pinia)
+  types/                     ← contratos de domínio (Atendimento.ts)
+  utils/                     ← funções puras (excelMapper, grouping, dateHelpers, estadoMap)
+  main.ts
+  style.css                  ← @theme Tailwind + @media print
 ```
 
-Direção de dependência permitida:
+### Direção de dependência (estrita, não inverter)
 
 ```
-pages → components(shared, ui) → (apenas types)
-pages/components → composables → stores → utils/types
-                              → services → utils/types
+UI components
+  └→ composables
+       └→ stores (via storeToRefs)
+            └→ types
+       └→ utils (grouping, dateHelpers, estadoMap)
+services
+  └→ utils/excelMapper
+       └→ utils/estadoMap
+       └→ types
+composables/useExcelUpload  ← único que importa service
 ```
 
-**Nunca**: store importando composable; util importando store; component importando service direto (composable é a porta).
+**Proibido**: service importar composable ou store. Componente importar service diretamente.
+
+---
 
 ## 4. Fluxo de dados real
 
-### Upload (entrada)
 ```
-FileUpload.vue (drag/click) ──emit('file')──> useExcelUpload.carregar(file)
-  → atendimentoService.lerArquivo(file)
-      → FileReader.readAsArrayBuffer → xlsx.read({ cellDates: true })
-      → utils.sheet_to_json (primeira sheet apenas) → mapExcelRows
-  → useAtendimentosStore.setAtendimentos(items, fileName)
-  → useFiltrosAtendimentoStore.ajustarParaDados(items)  ← snap filtro p/ último ym dos dados
+<FileUpload> @file
+  → useExcelUpload.carregar(file)
+    1. filtrosStore.limpar()
+    2. atendimentoService.lerArquivo(file)
+         → FileReader (Promise)
+         → xlsx.read(uint8, { type: 'array', cellDates: true })
+         → workbook.SheetNames[0]  ← apenas primeira aba
+         → utils.sheet_to_json<AtendimentoExcelRow>(sheet)
+         → mapExcelRows(rows)
+              → mapExcelRow(row) para cada linha
+                   → parseDate(row.Data)  ← null = linha descartada
+                   → parseStatus(row.Status)
+                   → cleanText(row.Estado), etc.
+                   → cleanText(row['Estado Revenda'])
+                        → getEstadoNome(uf.toUpperCase())
+                   → retorna Atendimento | null
+    3. atendimentosStore.setAtendimentos(items, file.name)
+    4. filtrosStore.ajustarParaDados(items)
+
+Pinia stores (fonte de verdade)
+  ↓ storeToRefs
+useAtendimentos()  ← PORTA ÚNICA para lista filtrada
+  → computed filtrados (por ano, mes, status)
+  ↓
+useKpis, useRanking, useDistribuicao, useGraficosResumo
+  → EChartsOption via computed<EChartsOption | null>
+  → BaseChart.vue (VChart)
+
+useEvolucao  ← exceção: usa todos atendimentos (raw store, sem filtro)
+  → EChartsOption via computed<EvolutionResult>
 ```
 
-### Render (saída)
+---
+
+## 5. Contrato de domínio — `Atendimento`
+
+```typescript
+interface Atendimento {
+  // Obrigatórios — derivados do parsing
+  data: Date           // objeto Date nativo
+  iso: string          // 'YYYY-MM-DD' (date.toISOString().slice(0, 10))
+  ym: string           // 'YYYY-MM' (iso.slice(0, 7))
+  year: string         // 'YYYY'    (iso.slice(0, 4))
+  dow: number          // 0=Dom, 1=Seg … 6=Sáb (date.getDay())
+  status: 'Novo' | 'Recorrente'
+  revendedor: string   // '' se ausente
+  estado: string       // coluna "Estado" — texto livre, '' se ausente
+  programa: string     // '' se ausente
+  impressora: string   // '' se ausente
+  // Opcionais — da coluna "Estado Revenda"
+  estadoUf?: string    // UF uppercase ('SP', 'RJ'). undefined se coluna ausente/vazia
+  estadoNome?: string  // Nome completo derivado via estadoMap ('São Paulo'). undefined se estadoUf undefined
+}
 ```
-DashboardPage v-if temDados ──> renderiza topbar+filtros+seções
-Filtros mudam ──> useFiltrosAtendimentoStore.atualizar
-useAtendimentos.filtrados (computed) ──> recomputa
-Todos composables de leitura (useKpis, useEvolucao, useGraficosResumo, useRanking, useDistribuicao)
-  derivam DESSE computed e regeram suas próprias options ECharts
+
+**Distinção crítica**: `estado` (campo livre da coluna "Estado") ≠ `estadoUf`/`estadoNome` (derivados da coluna "Estado Revenda" via `estadoMap.ts`).
+
+`estadoUf` e `estadoNome` são `undefined` quando a coluna "Estado Revenda" está ausente ou vazia — **não são string vazia**.
+
+Campos derivados (`ym`, `year`, `dow`, `iso`, `estadoNome`) são calculados **uma única vez** em `mapExcelRow`. Não recalcular em composables ou componentes.
+
+---
+
+## 6. Regras de normalização (excelMapper.ts)
+
+### Coluna `Data`
+- Aceita: `Date`, `number` (serial Excel), `string` parseável por `new Date()`
+- Inválida → linha descartada silenciosamente (`mapExcelRow` retorna `null`)
+- `cellDates: true` é obrigatório no `xlsx.read` — sem isso, datas chegam como número serial
+
+### Coluna `Status`
+- `parseStatus`: case-insensitive, checa prefixo `'rec'` → `'Recorrente'`
+- Qualquer outro valor → `'Novo'` (default seguro)
+- Aceita: "Rec", "rec", "RECORRENTE", "recurring", etc.
+
+### Campos texto (`cleanText`)
+- `null`/`undefined` → `''`
+- String `'--'` → `''` (sentinel de "sem dado")
+- Outros: trim
+
+### Coluna `'Estado Revenda'`
+- Texto lido via `cleanText`, depois `.toUpperCase()`
+- Se vazio → `estadoUf = undefined`, `estadoNome = undefined`
+- Se preenchido → `getEstadoNome(uf)`: busca em `UF_TO_ESTADO`; UF desconhecida → retorna a própria UF como fallback
+
+### Normalização de estado (`estadoMap.ts`)
+- **Fonte única**: `UF_TO_ESTADO` (27 entradas: AC→Acre … TO→Tocantins)
+- `ESTADO_TO_UF`: inverso calculado no módulo
+- `getEstadoNome(uf)`: UF sempre uppercase. Fallback = retorna uf
+- `getEstadoUF(nome)`: fallback = retorna nome
+- **Conversão ocorre exclusivamente em `mapExcelRow`**. Nunca em composable, componente ou store
+
+---
+
+## 7. Invariantes — NÃO QUEBRAR
+
+1. **`useAtendimentos()` é a única porta para dados filtrados.** Exceção documentada: `useEvolucao` usa raw store para comparações inter-anuais.
+
+2. **`'Todos'` é sentinel literal** em `filtro.ano`, `filtro.mes` e `filtro.status`. Nunca substituir por `null`/`undefined`.
+
+3. **Mudança de `ano` reseta `mes` para `'Todos'`** em `useFiltrosAtendimentoStore.atualizar`. Não mutar `filtro` diretamente — usar sempre `atualizar()`.
+
+4. **`filtroInicial()` retorna o mês anterior**, não o mês atual. Janeiro → dezembro do ano anterior.
+
+5. **Sequência de `useExcelUpload.carregar`** é rígida: `filtros.limpar()` → `service.lerArquivo` → `setAtendimentos` → `filtros.ajustarParaDados`. Mudar ordem = bug de estado.
+
+6. **`mapExcelRows` é síncrono**. Não introduzir `await` no loop.
+
+7. **Linhas sem `Data` válida são descartadas silenciosamente**. Exceção só se zero linhas válidas.
+
+8. **`BaseChart.vue` é o único ponto de registro de chart types ECharts** via `use([...])` e `registerMap`. Todo novo tipo de chart deve ser adicionado lá antes de ser usado.
+
+9. **GeoJSON `properties.name`** = nome completo idêntico ao valor em `UF_TO_ESTADO`. Qualquer divergência quebra o choropleth silenciosamente.
+
+10. **ECharts options são sempre `computed<EChartsOption | null>`**, nunca funções síncronas no template.
+
+11. **`useExcelUpload` não é singleton**. Cada instância tem refs independentes. `DashboardTopbar` usa apenas `reset()` da sua instância.
+
+12. **`limpar()` em ambos os stores reflete todos os campos**. Adicionar campo novo → atualizar `limpar()`.
+
+---
+
+## 8. Integração com ECharts
+
+### Componentes registrados em `BaseChart.vue use([...])`
+```
+CanvasRenderer, LineChart, BarChart, PieChart, MapChart,
+TitleComponent, TooltipComponent, LegendComponent, GridComponent, MarkLineComponent,
+GeoComponent, VisualMapComponent
 ```
 
-### Reset
-`DashboardTopbar` → `useExcelUpload().reset()` → limpa AMBOS stores → `temDados` vira false → volta para `DashboardUploadScreen`.
+### Registro do mapa
+```typescript
+import { registerMap } from 'echarts/core'
+import brazilMap from '@/assets/maps/brazil-states.json'
+registerMap('brazil', brazilMap as never)
+```
+Chamado no nível do módulo em `BaseChart.vue`. Usa `echarts/core` (tree-shaking preservado).
 
-## 5. Invariantes — **NÃO QUEBRAR**
+### GeoJSON: `src/assets/maps/brazil-states.json`
+- Fonte: IBGE API qualidade mínima, 27 features
+- Tamanho: ~97 KB
+- Propriedade de nome: `properties.name` = nome completo (ex: "São Paulo")
+- Nomes devem ser idênticos aos valores de `UF_TO_ESTADO`
 
-1. **`useAtendimentos()` é a porta única** para dados filtrados. Todo gráfico/KPI consome ele. Não filtrar `atendimentosStore.atendimentos` diretamente em componentes.
-2. **`AtendimentoFiltro` tem exatamente 3 campos**: `ano`, `mes`, `status`. Adicionar campo exige atualizar: type + `filtroInicial()` + `atualizar()` + `useAtendimentos.filtrados` + todos consumidores.
-3. **Formato de chaves temporais é fixo**:
-   - `Atendimento.ym` = `"YYYY-MM"` (usado como filtro de mês e chave de agregação)
-   - `Atendimento.year` = `"YYYY"`
-   - `Atendimento.iso` = `"YYYY-MM-DD"`
-   - `Atendimento.dow` = 0..6 (domingo=0); gráfico de weekday só usa 1..5.
-   - Esses campos são computados **uma única vez** em `excelMapper.mapExcelRow` e nunca recalculados.
-4. **Parsing de status**: qualquer string começando com `"rec"` (case-insensitive) → `'Recorrente'`. Qualquer outra coisa (incluindo vazio, lixo) → `'Novo'`. Default = `Novo`. Isso é regra de negócio, não bug.
-5. **Colunas do Excel são hardcoded** (`Data`, `Status`, `Revendedor`, `Estado`, `Programa`, `Impressora`). Linha sem `Data` válida = descartada **silenciosamente**.
-6. **Mudança de ano resseta mês**: `atualizar('ano', ...)` força `mes = 'Todos'` (regra implícita em `useFiltrosAtendimentoStore.atualizar`).
-7. **ECharts tree-shaking centralizado em `components/ui/BaseChart.vue`**: o `use([...])` lista exatamente os tipos/components ECharts disponíveis. Usar um chart/component não registrado lá → **falha silenciosa em runtime** (gráfico em branco, sem erro no console).
-8. **`<VChart>` está globalmente registrado em `main.ts`** mas `BaseChart.vue` também importa `VChart` localmente. As duas formas funcionam — **não remover nenhuma sem revisar a outra**.
-9. **Filtro inicial favorece mês anterior** (`filtroInicial()` em `useFiltrosAtendimentoStore.ts`). Se janeiro, retorna dezembro do ano anterior. Mantém continuidade entre meses.
-10. **`ajustarParaDados`**: se o filtro inicial não bate com nenhum `ym` da planilha, o filtro snapa para o último `ym` disponível. Sempre chamar após `setAtendimentos`.
+### Falhas silenciosas
+Chart type não registrado → gráfico não renderiza, sem erro no console.
 
-## 6. Acoplamentos críticos
+### Restrição
+Nunca usar `import * as echarts from 'echarts'` — importa bundle completo.
 
-- **Cores hex duplicadas** em 2 lugares: `style.css` `@theme` (`--color-jet-*`, `--color-accent*`) **E** strings hex literais nas options ECharts (`useGraficosResumo`, `useEvolucao`). Trocar cor exige atualizar os dois. **Dívida real.**
-- **`darkBase()` duplicado**: `useGraficosResumo.ts` e `useEvolucao.ts` ambos definem helper local `darkBase()/baseTheme()` com a mesma estrutura de tooltip/textStyle. Copy-paste.
-- **Type `Kpi` mora em `composables/useKpis.ts`** e é importado por `components/shared/KpiCard.vue`. Component depende de tipo de composable (acoplamento ascendente, mas tolerável).
-- **Dois stores acoplados em `useExcelUpload`**: ele ortografa as duas mutações (`atendimentosStore` + `filtrosStore`). Adicionar store novo de domínio sem atualizar `useExcelUpload.carregar`/`reset` = inconsistência.
-- **`useAtendimentoFilters` é wrapper sobre `useFiltrosAtendimentoStore`**: duas superfícies para a mesma coisa. Composable expõe `anos`, `meses`, `podeGerarRelatorio` derivados; resto delega ao store. Não criar uma terceira superfície.
+---
 
-## 7. Anti-patterns existentes (dívida técnica real)
+## 9. Convenções implícitas
 
-| # | Item | Risco |
+- Composables retornam objetos com `ref`/`computed` destrutruráveis
+- ECharts options sempre em `computed`, nunca criadas em função síncrona
+- `darkBase()` e `baseTheme()`: helpers locais em `useGraficosResumo` e `useEvolucao` (duplicação deliberada — não consolidar sem testar ambos)
+- `Dashboard<X>.vue`: sem props de dados, cada um instancia seu próprio composable
+- Componentes "puros" (KpiCard, HBarList, etc.): recebem props, não chamam composables de domínio
+- Toda seção do dashboard usa `BaseCard` + `class="animate-fade-up"`
+- `data-print="hide"` / `"show"`: toda nova seção deve declarar explicitamente
+
+---
+
+## 10. Acoplamentos críticos
+
+| Acoplamento | Arquivos | Risco |
 |---|---|---|
-| 1 | Hex codes hardcoded em composables (`#00D68F`, `#FFA44F`, `#6C5CE7`, etc.) duplicando `@theme` | Drift visual quando trocar paleta |
-| 2 | `darkBase()/baseTheme()` duplicado em 2 composables | Drift de estilo dos tooltips |
-| 3 | `useExcelUpload` não é singleton — instanciado por `DashboardUploadScreen` E `DashboardTopbar`. `carregando`/`erro` refs não são compartilhados | Footgun: topbar nunca lê esses refs hoje, mas se ler vai falhar |
-| 4 | `mapExcelRow` descarta linhas inválidas **silenciosamente** (sem contagem nem warning) | Usuário não sabe quantas linhas foram ignoradas |
-| 5 | Sem validação de tamanho/MIME do arquivo. xlsx parsing roda na thread principal | Bloqueia UI em arquivos grandes |
-| 6 | Nenhuma camada de error boundary | Composable que joga = dashboard inteiro quebra |
-| 7 | Magic numbers: `limit = 3`, `limit = 5`, `maxVal * 1.18`, `top: 30`, `bottom: 24` | OK por enquanto; vira ruído quando crescer |
-| 8 | `DashboardDonut` é o único componente com `defineOptions({ name: ... })` | Inconsistência menor |
-| 9 | Formatação de números espalhada (`toLocaleString('pt-BR')`, `.toFixed(1).replace('.', ',')`) | Não há helper central |
-| 10 | Print styles via `data-print="hide/show"` espalhados — esquecer atributo num componente novo o quebra na impressão | Convenção frágil sem enforcement |
+| `Kpi` type exportado de `useKpis` | `useKpis.ts` → `KpiCard.vue` | Mover type quebra KpiCard |
+| Cores hardcoded ≡ tokens `@theme` | `useEvolucao.ts`, `useGraficosResumo.ts` ↔ `style.css` | Dessincronização silenciosa |
+| Nomes em `UF_TO_ESTADO` ≡ `properties.name` GeoJSON | `estadoMap.ts` ↔ `brazil-states.json` | Divergência = estados sem dado no mapa |
+| Sequência de `useExcelUpload.carregar` | `useExcelUpload.ts` ↔ ambos os stores | Mudar ordem → snap de filtro antes dos dados |
+| `useGraficosResumo` depende de `useDistribuicao.weekday` | `useGraficosResumo.ts` ↔ `useDistribuicao.ts` | `weekday` não pode ser removido |
+| Ordem de componentes em `DashboardPage.vue` = ordem do PDF | `DashboardPage.vue` | Reordenar = mudar layout impresso |
 
-## 8. Hotspots / gargalos de escalabilidade
+---
 
-- **Filtragem N×M**: cada chart composable refiltra `atendimentos.value`. Hoje com Excel típico (poucos milhares de linhas) é negligível. Acima de ~50k linhas vira problema — derivar **uma vez** em `useAtendimentos` e passar adiante.
-- **xlsx síncrono na thread principal**: arquivos grandes congelam a UI. Solução futura: web worker.
-- **Pasta `composables/` flat**: hoje 7 arquivos. Se virar 25+, deveria virar `composables/atendimento/`, `composables/charts/`, etc.
-- **`pages/` tem só `Dashboard/`**: estrutura suporta multi-feature, mas se nunca surgir outra feature, a indireção é desnecessária.
-- **Sem code-splitting além da rota lazy do Dashboard**: bundle inclui ECharts + xlsx no chunk principal do dashboard. `xlsx` poderia ser lazy import só quando o user clica em upload.
+## 11. Anti-patterns
 
-## 9. Decisões arquiteturais importantes (preservar)
+| Anti-pattern | Consequência |
+|---|---|
+| Filtrar `atendimentosStore.atendimentos` direto | Filtros não se aplicam |
+| Lógica de negócio em `atendimentoService` | Service é boundary puro de IO |
+| Lançar exceção por linha inválida em `mapExcelRow` | Derruba o lote inteiro |
+| `import * as echarts from 'echarts'` | Anula tree-shaking |
+| Chart type não registrado em `BaseChart.vue` | Falha silenciosa |
+| Mutar `filtro` diretamente | Bypassa reset de `mes` ao mudar `ano` |
+| Converter UF↔nome fora de `mapExcelRow` | Duplica lógica de `estadoMap.ts` |
+| Ler `carregando`/`erro` da instância `useExcelUpload` do Topbar | Não reflete estado real do upload |
+| Nova seção sem `data-print` | Aparece no PDF inesperadamente |
+| Usar `null`/`undefined` como sentinel de filtro | Quebra todos os composables |
 
-- **Tudo client-side, deliberado.** Não sugerir backend "porque é o normal". Se precisar de persistência, primeiro destino é `localStorage`/IndexedDB.
-- **Pinia composition stores** (não options). Manter o estilo.
-- **ECharts tree-shaken**, não import full. Cada `use([...])` adicionado em `BaseChart.vue` é deliberado.
-- **Tailwind v4 sem config file.** Tema vive em `src/style.css` `@theme`. Não criar `tailwind.config.js` — ele não vai funcionar com o plugin Vite v4.
-- **TypeScript strict** com `noUnusedLocals`/`noUnusedParameters` ligados — `vue-tsc -b` no build vai estourar se sobrar variável.
-- **`<script setup>` em tudo.** Sem Options API. Sem `defineComponent`.
-- **i18n: pt-BR hardcoded.** Strings em português direto no JSX. Não preparado para i18n.
+---
 
-## 10. Convenções implícitas (não documentadas em lugar nenhum no projeto)
+## 12. Hotspots e limitações
 
-- Arquivos `Dashboard<X>.vue` em `pages/Dashboard/components/` recebem dados via composable próprio, nunca via props (exceto componentes "puros" como `KpiCard`, `HBarList`, `RankingList`).
-- `BaseCard` envolve toda seção de gráfico/lista.
-- Animação `animate-fade-up` é aplicada em todo card do dashboard (consistência visual).
-- ECharts options sempre construídas em `computed` dentro de composable, nunca inline no template.
-- Helpers de tema ECharts (`darkBase`/`baseTheme`) são privados ao composable (não exportados).
-- Composables retornam `ref`s/`computed`s **destructuráveis** — chamador faz `const { x, y } = useFoo()` direto, não `.value` no retorno.
+- **Parsing xlsx na thread principal**: arquivo grande congela UI. Sem validação de tamanho.
+- **Sem contagem de linhas descartadas**: usuário não vê quantas linhas foram ignoradas.
+- **Sem validação de schema**: colunas em inglês → todas linhas inválidas → erro genérico.
+- **Cores hardcoded duplicadas** em composables vs tokens `@theme`.
+- **`estadoUf`/`estadoNome` são opcionais**: planilhas sem "Estado Revenda" são válidas. Código que usa esses campos deve tratar `undefined`.
+- **`xlsx` 0.18.5** tem CVEs históricos. Atualizar exige checar nomes de export.
+- **GeoJSON (~97 KB)** importado estaticamente no bundle.
+- **Sem persistência**: reload = perda de todos os dados.
 
-## 11. O que IA agents tipicamente erram aqui
+---
 
-1. **Adicionar `tailwind.config.js`** achando que vai ser pego (não vai, é v4 + plugin).
-2. **Adicionar novo tipo de chart** sem registrar em `BaseChart.vue` `use([...])` → gráfico em branco sem erro.
-3. **Adicionar `fetch()` / API call** assumindo backend — não existe.
-4. **Mudar nomes de coluna do Excel** sem mexer em `AtendimentoExcelRow` (type) E `mapExcelRow` (parser).
-5. **Adicionar campo em `AtendimentoFiltro`** sem propagar para os 5+ pontos de uso.
-6. **Trocar `<script setup>` por `defineComponent`** por hábito de outros projetos Vue.
-7. **Persistir dados em algum lugar** sem perceber que o reset funciona pela ausência de persistência.
-8. **Mexer em cor no `@theme`** e esquecer dos hex literais nos composables ECharts.
-9. **Filtrar `atendimentosStore.atendimentos` direto** em componente ignorando `useAtendimentos()`.
-10. **Renomear chave de filtro `'Todos'`** sem perceber que é sentinel literal usado em vários `if`s.
+## 13. Índice de contextos locais
 
-## 12. Trade-offs identificados
+| Arquivo | Escopo |
+|---|---|
+| `src/services/CONTEXT.md` | Contrato Excel, parsing, invariantes do service |
+| `src/stores/CONTEXT.md` | Regras dos dois stores, filtro inicial, snap de dados |
+| `src/composables/CONTEXT.md` | Mapa de dependências, convenções, documentação por composable |
+| `src/pages/Dashboard/CONTEXT.md` | Composição da página, print mode, condicionais de renderização |
 
-- **Stateless reload vs. simplicidade**: aceitam-se reloads destruindo dados em favor de fluxo de upload limpo. Trade-off explícito do produto.
-- **Composables vs Pinia**: a equipe escolheu composables para view-model e Pinia só para state cru. Mantém Pinia pequeno mas cria dois lugares para procurar lógica.
-- **xlsx no client vs server**: cliente puro = zero infra; em troca, parsing pesa na thread principal e arquivos grandes sofrem.
-
-## 13. Diretrizes para contribuição segura
-
-- **Antes de criar arquivo novo**: confira convenção de pasta (composable? store? component shared? feature?).
-- **Antes de mexer no Excel**: alterações em colunas exigem migração de `AtendimentoExcelRow` + `excelMapper` + possivelmente o tipo `Atendimento`.
-- **Antes de adicionar gráfico**: registre o chart type + components necessários em `BaseChart.vue use([...])`.
-- **Antes de adicionar cor**: extenda `@theme` em `style.css` **E** use a mesma cor nas options ECharts.
-- **Antes de adicionar filtro**: atualize type, store, `filtroInicial`, `useAtendimentos.filtrados`, UI.
-- **Antes de adicionar seção impressa**: defina `data-print="hide"` ou `data-print="show"` consistente com o resto.
-- **Não introduza dependência nova** sem necessidade clara. O bundle atual é parcimonioso.
-- **Não introduza testes/lint** sem alinhar com o dono — o projeto deliberadamente não tem.
-
-## 14. Onde tem CONTEXT.md local
-
-- `src/pages/Dashboard/CONTEXT.md` — composição da página, regras de print, KPIs condicionais por status
-- `src/composables/CONTEXT.md` — view-model layer, padrões de composables, derivações
-- `src/stores/CONTEXT.md` — fonte da verdade, regras escondidas do filtro inicial e `ajustarParaDados`
-- `src/services/CONTEXT.md` — boundary de IO, contrato Excel, parsing/normalização
-
-## 15. Estrutura futura ideal (quando justificar)
-
-- `composables/` agrupado por domínio: `composables/atendimento/`, `composables/charts/`
-- Tokens ECharts em `utils/chartTheme.ts` (helpers + paleta) para eliminar duplicação de cores e `darkBase()`
-- `useExcelUpload` virar um Pinia store (`useUploadStore`) para `carregando`/`erro` serem globais
-- `services/atendimentoService` rodar parsing em Web Worker para arquivos grandes
-- Persistência opcional em IndexedDB (preservar sessões)
-- Helper de formatação `utils/format.ts` (`formatNumber`, `formatPercent`, `formatDateBR`) centralizado
-- Camada de `errors/` com error boundary no nível de rota
-- Quando surgir nova feature: `pages/<Feature>/` com mesma estrutura do Dashboard
-
-## 16. Roadmap de evolução estrutural (priorizado por ROI)
-
-| Prio | Item | Esforço | Benefício |
-|---|---|---|---|
-| P0 | Centralizar paleta ECharts em `utils/chartTheme.ts` | 1h | Elimina drift de cor (dívida #1 + #2) |
-| P0 | Surfaceear linhas descartadas no upload (warning na UI) | 1h | Visibilidade pro usuário |
-| P1 | Transformar `useExcelUpload` em store Pinia | 2h | Estado de upload compartilhado/correto |
-| P1 | Lazy import `xlsx` só ao clicar em upload | 30min | Bundle inicial menor |
-| P2 | Helpers de formatação centralizados | 2h | Tira ruído + consistência |
-| P2 | Validação de arquivo (tamanho/MIME) | 1h | UX defensiva |
-| P3 | xlsx em Web Worker | 4h | Escala para arquivos grandes |
-| P3 | Persistência IndexedDB opcional | 4h | Não perder dados em reload |
-| P3 | ErrorBoundary no nível de rota | 2h | Tolerância a falhas |
-
-## 17. Problemas reais vs preferências estéticas
-
-**Problemas reais** (resolver):
-- Cor duplicada (drift garantido a médio prazo)
-- Linhas Excel descartadas silenciosamente (UX)
-- `useExcelUpload` não singleton (footgun esperando)
-
-**Preferências estéticas** (não tocar sem motivo):
-- `defineOptions` em só um componente
-- Magic numbers em options de gráfico
-- Composables flat (cresce se precisar)
-- Wrapper `useAtendimentoFilters` vs store direto
+**Precedência**: CONTEXT.md local > este arquivo global.

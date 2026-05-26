@@ -1,65 +1,107 @@
 # CONTEXT — stores
 
-Fonte da verdade do estado. **Dois stores acoplados**, ambos Pinia composition-style.
+Fonte de verdade do estado. Dois stores Pinia, composition-style. Todo o app deriva daqui.
 
 ## Stores
 
-### `useAtendimentosStore`
-- Estado: `atendimentos: Atendimento[]`, `nomeArquivo: string | null`.
-- Derivado: `temDados` (≡ length>0), `total`.
-- API: `setAtendimentos(items, fileName)`, `limpar()`.
-- **Único storage do dataset.** Tudo no app deriva daqui.
+### `useAtendimentosStore` (`stores/useAtendimentosStore.ts`)
 
-### `useFiltrosAtendimentoStore`
-- Estado: `filtro: AtendimentoFiltro` (`reactive`, não `ref`).
-- API: `atualizar(chave, valor)`, `limpar()`, `ajustarParaDados(atendimentos)`.
+| Estado | Tipo | Inicial |
+|---|---|---|
+| `atendimentos` | `ref<Atendimento[]>` | `[]` |
+| `nomeArquivo` | `ref<string \| null>` | `null` |
 
-## Regras escondidas que precisam ser preservadas
+| Derivado | Tipo | Regra |
+|---|---|---|
+| `temDados` | `computed<boolean>` | `atendimentos.value.length > 0` |
+| `total` | `computed<number>` | `atendimentos.value.length` |
 
-### 1. Filtro inicial não é `'Todos'`
-`filtroInicial()` retorna o **mês anterior ao atual**:
-- Janeiro → dezembro do ano passado.
-- Demais → mês atual − 1, ano corrente.
-- `status` inicia em `'Todos'`.
+| API | Assinatura | Comportamento |
+|---|---|---|
+| `setAtendimentos` | `(items, fileName?)` | Substitui array e nome do arquivo |
+| `limpar` | `()` | Zera array e nome |
 
-Motivo: dashboard de fechamento mensal. Usuário tipicamente quer ver o último mês fechado.
+### `useFiltrosAtendimentoStore` (`stores/useFiltrosAtendimentoStore.ts`)
 
-### 2. Mudança de ano força mês para `'Todos'`
-Implementado em `atualizar()`:
-```ts
-if (chave === 'ano') filtro.mes = 'Todos'
+| Estado | Tipo | Regra |
+|---|---|---|
+| `filtro` | `reactive<AtendimentoFiltro>` | Inicializa com `filtroInicial()` |
+
+```typescript
+interface AtendimentoFiltro {
+  ano: string     // 'YYYY' ou 'Todos'
+  mes: string     // 'YYYY-MM' ou 'Todos'
+  status: 'Todos' | 'Novo' | 'Recorrente'
+}
 ```
-**Não remover.** Evita estado inválido (mes de um ano que não tem mais dados).
 
-### 3. `ajustarParaDados` faz snap inteligente do filtro
-Após carregar planilha:
-- Se o `ym` corrente do filtro **existe** nos dados → mantém.
-- Se **não existe** → snapa para o último `ym` da planilha (filtro `ano` e `mes` se ajustam).
-- Se planilha vazia → no-op (mas `useExcelUpload` joga erro antes de chegar aqui).
+| API | Assinatura | Comportamento |
+|---|---|---|
+| `atualizar` | `(chave, valor)` | Seta `filtro[chave]`; se `chave === 'ano'` → força `filtro.mes = 'Todos'` |
+| `limpar` | `()` | `Object.assign(filtro, filtroInicial())` |
+| `ajustarParaDados` | `(atendimentos)` | Snapa filtro para os dados disponíveis |
 
-**Sempre chamar após `setAtendimentos`.** Já está orquestrado em `useExcelUpload.carregar`.
+---
+
+## Regras críticas
+
+### 1. `filtroInicial()` retorna o mês anterior ao atual
+
+```typescript
+const curMonth = now.getMonth() // 0-indexed
+const ano = curMonth === 0 ? String(curYear - 1) : String(curYear)
+const prevMonth = curMonth === 0 ? 12 : curMonth   // 1-indexed
+const mes = `${ano}-${String(prevMonth).padStart(2, '0')}`
+// status: 'Todos'
+```
+
+- Janeiro → `mes = 'YYYY-12'` do ano anterior
+- Demais → mês atual − 1, ano corrente
+- `status` inicia sempre em `'Todos'`
+
+### 2. Mudança de `ano` força `mes = 'Todos'`
+
+```typescript
+function atualizar(chave, valor) {
+  filtro[chave] = valor
+  if (chave === 'ano') filtro.mes = 'Todos'
+}
+```
+
+Nunca mutar `filtro.ano` diretamente — usar `atualizar('ano', ...)` para herdar esse comportamento.
+
+### 3. `ajustarParaDados` — snap inteligente do filtro
+
+Chamada após `setAtendimentos`. Comportamento:
+
+- `atendimentos.length === 0` → no-op
+- `atendimentos.some(a => a.ym === filtro.mes)` → mantém filtro atual (dados existem para o período)
+- Caso contrário → snapa para o último `ym` do dataset (`filtro.ano` e `filtro.mes` são atualizados diretamente)
+
+**Importante**: mutação direta de `filtro.ano` e `filtro.mes` aqui é intencional — não passa por `atualizar()`, portanto não dispara o reset de mês.
 
 ### 4. `'Todos'` é sentinel literal
-Em `filtro.ano`, `filtro.mes`, `filtro.status`. Consumidores fazem `if (filtro.X === 'Todos')` para pular a dimensão. **Não trocar para `null`/`undefined`.** Quebraria N composables.
 
-### 5. `limpar()` em ambos stores zera tudo
-`useExcelUpload.reset()` chama os dois. Adicionar campo novo a qualquer store exige refletir em `limpar()` ou o reset vira inconsistente.
+Em `filtro.ano`, `filtro.mes` e `filtro.status`. Consumidores fazem `if (filtro.X === 'Todos')` para pular aquela dimensão de filtro. **Não substituir por `null`/`undefined`** — quebraria todos os composables.
+
+### 5. `limpar()` reflete todos os campos
+
+`useExcelUpload.reset()` chama `limpar()` em ambos os stores. Adicionar campo novo a qualquer store exige atualizar `limpar()` correspondente, ou o reset fica inconsistente.
+
+---
 
 ## Acoplamentos
 
-- **`useExcelUpload` muta os dois stores em sequência**: filtros.limpar → atendimentos.setAtendimentos → filtros.ajustarParaDados. Mudar ordem = bug sutil (snap acontece antes dos dados existirem).
-- **`useAtendimentos` (composable) une os dois via `storeToRefs`**. É a porta canônica para a UI ler dados filtrados.
-- **`useAtendimentoFilters` (composable) também combina os dois** para expor `anos`/`meses` derivados dos dados + estado do filtro.
+- **`useExcelUpload` orquestra ambos em ordem rígida**: `filtros.limpar()` → `setAtendimentos()` → `filtros.ajustarParaDados()`. Não reordenar.
+- **`useAtendimentos`** une os dois via `storeToRefs` — porta canônica para UI.
+- **`useAtendimentoFilters`** combina os dois para expor `anos`/`meses` derivados + estado do filtro para a UI.
+- **`useEvolucao`** usa `storeToRefs(useAtendimentosStore())` diretamente (dataset completo, intencionalmente sem filtro).
 
-## Anti-patterns a evitar
+---
 
-- **Não persistir** dos stores em localStorage sem alinhar com produto. Hoje reload é "reset" deliberado.
-- **Não criar terceiro store** sem necessidade clara. Os dois cobrem o domínio inteiro.
-- **Não mutar `filtro` direto** (ex.: `filtrosStore.filtro.ano = '2024'`). Use `atualizar()` para herdar a regra do reset de mês.
-- **Não retornar `filtro` como `ref` cru** de fora do store — ele é `reactive`. Use `storeToRefs` ou destruture via wrapper composable.
+## Proibições
 
-## Para IA agents
-
-- Adicionar campo em `Atendimento` (ex.: `categoria`) → ajustar `Atendimento` type, `AtendimentoExcelRow`, `mapExcelRow`, e qualquer composable que agrega por esse campo. Store em si não precisa mudar (é só `Atendimento[]`).
-- Adicionar dimensão de filtro (ex.: `categoria`) → atualizar `AtendimentoFiltro` type, `filtroInicial()`, possivelmente `atualizar()` (se houver reset cascata), `useAtendimentos.filtrados`, UI.
-- Adicionar derivado novo (ex.: `temDadosRecentes`) → preferir computed dentro do store em vez de spalhar em vários lugares.
+- Não persistir stores em `localStorage` sem decisão de produto. Hoje reload = reset deliberado.
+- Não criar terceiro store sem necessidade clara. Os dois cobrem o domínio.
+- Não mutar `filtro` diretamente de fora do store — usar `atualizar()`.
+- Não retornar `filtro` como `ref` cru — é `reactive`. Acessar via `storeToRefs` ou `useAtendimentoFilters`.

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
+import { use, registerMap } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import {
   LineChart,
   BarChart,
   PieChart,
+  MapChart,
 } from 'echarts/charts'
 import {
   TitleComponent,
@@ -13,20 +14,28 @@ import {
   LegendComponent,
   GridComponent,
   MarkLineComponent,
+  GeoComponent,
+  VisualMapComponent,
 } from 'echarts/components'
 import type { EChartsOption } from 'echarts'
+import brazilMap from '@/assets/maps/brazil-states.json'
 
 use([
   CanvasRenderer,
   LineChart,
   BarChart,
   PieChart,
+  MapChart,
   TitleComponent,
   TooltipComponent,
   LegendComponent,
   GridComponent,
   MarkLineComponent,
+  GeoComponent,
+  VisualMapComponent,
 ])
+
+registerMap('brazil', brazilMap as never)
 
 interface Props {
   option: EChartsOption

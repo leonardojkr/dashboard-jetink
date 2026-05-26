@@ -1,4 +1,5 @@
 import type { Atendimento, AtendimentoExcelRow, AtendimentoStatus } from '@/types/Atendimento'
+import { getEstadoNome } from '@/utils/estadoMap'
 
 function parseDate(value: unknown): Date | null {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
@@ -29,6 +30,10 @@ export function mapExcelRow(row: AtendimentoExcelRow): Atendimento | null {
   const ym = iso.slice(0, 7)
   const year = iso.slice(0, 4)
 
+  const estadoUfRaw = cleanText(row['Estado Revenda'] ?? row['Estado Revendedor'])
+  const estadoUf = estadoUfRaw ? estadoUfRaw.toUpperCase() : undefined
+  const estadoNome = estadoUf ? getEstadoNome(estadoUf) : undefined
+
   return {
     data: date,
     iso,
@@ -40,6 +45,8 @@ export function mapExcelRow(row: AtendimentoExcelRow): Atendimento | null {
     estado: cleanText(row.Estado),
     programa: cleanText(row.Programa),
     impressora: cleanText(row.Impressora),
+    estadoUf,
+    estadoNome,
   }
 }
 
