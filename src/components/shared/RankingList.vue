@@ -15,7 +15,7 @@ const POS_CLASSES = ['text-jet-yellow', 'text-zinc-300', 'text-amber-600']
     <li
       v-for="(item, idx) in items"
       :key="item.key"
-      class="grid grid-cols-[28px_1fr_auto] items-center gap-3.5 py-2.5 border-b border-border last:border-b-0"
+      class="grid grid-cols-[28px_1fr_auto] items-center gap-3.5 py-2.5 min-h-[60px] border-b border-border last:border-b-0"
     >
       <span :class="['font-mono text-[13px] font-bold text-center', POS_CLASSES[idx] ?? 'text-text-muted']">
         {{ String(idx + 1).padStart(2, '0') }}
