@@ -63,6 +63,11 @@ const option = computed<EChartsOption | null>(() => {
         type: 'map',
         map: 'brazil',
         roam: false,
+        left: '3%',
+        right: '3%',
+        top: '3%',
+        bottom: '3%',
+        aspectScale: 0.88,
         label: { show: false },
         itemStyle: {
           areaColor: NEUTRAL_COLOR,
@@ -103,27 +108,8 @@ const option = computed<EChartsOption | null>(() => {
       </div>
     </template>
 
-    <div class="-mx-6 -mb-6 flex-1 min-h-0 flex overflow-hidden rounded-b-[14px]">
-      <div class="flex-1 min-w-0">
-        <BaseChart v-if="option" :option="option" height="100%" />
-      </div>
-
-      <div class="w-[200px] border-l border-border flex flex-col overflow-hidden shrink-0">
-        <ul class="flex flex-col gap-2.5 p-4 overflow-y-auto flex-1 min-h-0">
-          <li
-            v-for="(w, i) in [88, 74, 63, 55, 46, 39, 31, 24]"
-            :key="i"
-            class="grid items-center gap-2"
-            style="grid-template-columns: 26px 1fr 26px"
-          >
-            <div class="h-3 bg-bg-elevated rounded" />
-            <div class="h-5 bg-bg-elevated rounded overflow-hidden">
-              <div class="h-full bg-border-light rounded" :style="{ width: `${w}%` }" />
-            </div>
-            <div class="h-3 bg-bg-elevated rounded" />
-          </li>
-        </ul>
-      </div>
+    <div class="-mx-6 -mb-6 flex-1 min-h-0 overflow-hidden rounded-b-[14px]">
+      <BaseChart v-if="option" :option="option" height="100%" />
     </div>
   </BaseCard>
 </template>
