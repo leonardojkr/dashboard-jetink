@@ -28,16 +28,10 @@ export const UF_TO_ESTADO: Record<string, string> = {
   TO: 'Tocantins',
 }
 
-export const ESTADO_TO_UF: Record<string, string> = Object.fromEntries(
-  Object.entries(UF_TO_ESTADO).map(([uf, nome]) => [nome, uf]),
-)
+export const ESTADOS_BRASIL = Object.values(UF_TO_ESTADO)
 
 export function getEstadoNome(uf: string): string {
   return UF_TO_ESTADO[uf.toUpperCase()] ?? uf
-}
-
-export function getEstadoUF(nome: string): string {
-  return ESTADO_TO_UF[nome] ?? nome
 }
 
 function normalizar(s: string): string {

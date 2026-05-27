@@ -2,23 +2,14 @@ import { computed } from 'vue'
 import type { EChartsOption } from 'echarts'
 import { useAtendimentos } from './useAtendimentos'
 import { useDistribuicao } from './useDistribuicao'
-
-const COLOR_NOVO = '#00D68F'
-const COLOR_REC = '#FFA44F'
-const COLOR_ACCENT = '#6C5CE7'
-const COLOR_ACCENT_LIGHT = '#A29BFE'
-
-function darkBase(): Partial<EChartsOption> {
-  return {
-    backgroundColor: 'transparent',
-    textStyle: { color: '#F0F2F8', fontFamily: 'DM Sans, sans-serif' },
-    tooltip: {
-      backgroundColor: '#181D29',
-      borderColor: '#2A3044',
-      textStyle: { color: '#F0F2F8' },
-    },
-  }
-}
+import {
+  CHART_COLORS,
+  chartBase,
+  chartTooltip,
+  axisLabelStyle,
+  categoryAxisLine,
+  valueSplitLine,
+} from '@/utils/chartTheme'
 
 export function useGraficosResumo() {
   const { atendimentos } = useAtendimentos()
@@ -34,8 +25,8 @@ export function useGraficosResumo() {
     const { novos, rec, total } = donutData.value
     if (!total) return null
     return {
-      ...darkBase(),
-      tooltip: { ...darkBase().tooltip, trigger: 'item' },
+      ...chartBase(),
+      tooltip: { ...chartTooltip(), trigger: 'item' },
       legend: { show: false },
       series: [
         {
@@ -49,14 +40,14 @@ export function useGraficosResumo() {
             position: 'center',
             formatter: () => `{val|${total}}\n{unit|atendimentos}`,
             rich: {
-              val: { fontFamily: 'Space Mono', fontSize: 22, fontWeight: 700, color: '#F0F2F8' },
-              unit: { fontSize: 10, color: '#8B92A8', padding: [4, 0, 0, 0] },
+              val: { fontFamily: 'Space Mono', fontSize: 22, fontWeight: 700, color: CHART_COLORS.textPrimary },
+              unit: { fontSize: 10, color: CHART_COLORS.textSecondary, padding: [4, 0, 0, 0] },
             },
           },
-          itemStyle: { borderColor: '#12161F', borderWidth: 3 },
+          itemStyle: { borderColor: CHART_COLORS.bgCard, borderWidth: 3 },
           data: [
-            { name: 'Novos', value: novos, itemStyle: { color: COLOR_NOVO } },
-            { name: 'Recorrentes', value: rec, itemStyle: { color: COLOR_REC } },
+            { name: 'Novos', value: novos, itemStyle: { color: CHART_COLORS.novo } },
+            { name: 'Recorrentes', value: rec, itemStyle: { color: CHART_COLORS.recorrente } },
           ],
         },
       ],
@@ -67,21 +58,21 @@ export function useGraficosResumo() {
     const values = weekday.value.map((w) => w.total)
     const maxVal = values.length ? Math.max(...values) : 0
     return {
-      ...darkBase(),
-      tooltip: { ...darkBase().tooltip, trigger: 'axis' },
+      ...chartBase(),
+      tooltip: { ...chartTooltip(), trigger: 'axis' },
       grid: { left: 32, right: 8, top: 30, bottom: 24, containLabel: false },
       xAxis: {
         type: 'category',
         data: weekday.value.map((w) => w.label),
-        axisLine: { lineStyle: { color: '#2A3044' } },
-        axisLabel: { color: '#8B92A8' },
+        axisLine: categoryAxisLine(),
+        axisLabel: axisLabelStyle(),
       },
       yAxis: {
         type: 'value',
         max: Math.ceil(maxVal * 1.18),
         axisLine: { show: false },
-        splitLine: { lineStyle: { color: '#1E2433' } },
-        axisLabel: { color: '#8B92A8' },
+        splitLine: valueSplitLine(),
+        axisLabel: axisLabelStyle(),
       },
       series: [
         {
@@ -93,12 +84,12 @@ export function useGraficosResumo() {
               type: 'linear',
               x: 0, y: 0, x2: 0, y2: 1,
               colorStops: [
-                { offset: 0, color: COLOR_ACCENT_LIGHT },
-                { offset: 1, color: COLOR_ACCENT },
+                { offset: 0, color: CHART_COLORS.accentLight },
+                { offset: 1, color: CHART_COLORS.accent },
               ],
             },
           },
-          label: { show: true, position: 'top', color: '#F0F2F8', fontSize: 11, fontFamily: 'Space Mono' },
+          label: { show: true, position: 'top', color: CHART_COLORS.textPrimary, fontSize: 11, fontFamily: 'Space Mono' },
         },
       ],
     }

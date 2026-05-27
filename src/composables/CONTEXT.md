@@ -2,6 +2,25 @@
 
 View-model layer. Cada composable expõe `ref`s/`computed`s para a UI consumir. Sem side effects — exceto `useExcelUpload`.
 
+---
+
+## Responsabilidade
+
+- Adaptar o estado dos stores para o formato consumido pela UI.
+- Produzir `EChartsOption` para os componentes de gráfico.
+- Encapsular regras de filtragem, agregação e ordenação.
+- Servir como única ponte autorizada entre componentes e o domínio.
+
+**Não fazem**: IO direto (com exceção de `useExcelUpload`), persistência, render.
+
+---
+
+## Papel na arquitetura
+
+Camada intermediária entre stores e componentes. Componente nunca toca o store de domínio diretamente (exceto exceções declaradas em `pages/Dashboard/CONTEXT.md`). Todo gráfico nasce aqui como `computed<EChartsOption>`.
+
+---
+
 ## Mapa de dependências
 
 ```
@@ -11,18 +30,21 @@ useAtendimentos          ← porta única para dados filtrados
     ├── useDistribuicao  ← usado por useGraficosResumo (weekday)
     └── useGraficosResumo
 
-useEvolucao              ← usa storeToRefs direto (NÃO passa por useAtendimentos)
+useEvolucao              ← exceção: usa storeToRefs(useAtendimentosStore()) direto
 useAtendimentoFilters    ← wrapper de useFiltrosAtendimentoStore para a UI
 useExcelUpload           ← orquestra ambos os stores (único com side effect)
 ```
 
-## Convenção obrigatória
+---
+
+## Convenção arquitetural obrigatória
 
 - **`useAtendimentos()` é a única porta para dados filtrados**. Nenhum composable derivado acessa `atendimentosStore.atendimentos` diretamente.
   - **Exceção real e documentada**: `useEvolucao` usa o store raw porque precisa do dataset completo para comparações inter-anuais.
 - Composables retornam objetos com `ref`/`computed` destrutruráveis. UI faz `const { x } = useFoo()`.
 - `EChartsOption` é sempre construída dentro de `computed<EChartsOption | null>`. Nunca em função síncrona chamada do template.
 - Composables não importam `atendimentoService` diretamente. Exceção: `useExcelUpload`.
+- Cores ECharts vêm de `utils/chartTheme.ts`. Não declarar hex literal em composable.
 
 ---
 
@@ -31,9 +53,9 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 ### `useAtendimentos`
 - Combina `useAtendimentosStore` + `useFiltrosAtendimentoStore` via `storeToRefs`.
 - Retorna:
-  - `atendimentos`: `computed<Atendimento[]>` — filtrado por `ano`, `mes`, `status`. `'Todos'` = sem filtro na dimensão.
+  - `atendimentos`: `computed<Atendimento[]>` filtrado por `ano`, `mes`, `status`. `'Todos'` = sem filtro na dimensão.
   - `todosAtendimentos`: ref raw do store (sem filtro).
-- Regra de filtro: `a.year === ano` (ano), `a.ym === mes` (mes), `a.status === status`.
+- Regra de filtro: `a.year === ano`, `a.ym === mes`, `a.status === status`.
 
 ### `useAtendimentoFilters`
 - Wrapper de `useFiltrosAtendimentoStore` + derivações de `useAtendimentosStore`.
@@ -46,11 +68,11 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 ### `useKpis`
 - Usa `useAtendimentos()` (filtrado).
 - Retorna: `stats` (dados crus), `kpis` (array renderizável).
-- **`Kpi` type é exportado daqui** e importado por `KpiCard.vue`. Não mover sem atualizar KpiCard.
+- **`Kpi` type é exportado daqui** e importado por `KpiCard.vue`. Não mover sem atualizar `KpiCard`.
 - **`kpis` muda em quantidade e shape conforme `filtro.status`**:
-  - `'Todos'` → 5 KPIs: Total, Novos, Recorrentes, Revendedores Ativos, Estados Alcançados
-  - `'Novo'` → 3 KPIs: Novos, Revendedores Ativos, Estados Alcançados
-  - `'Recorrente'` → 3 KPIs: Recorrentes, Revendedores Ativos, Estados Alcançados
+  - `'Todos'` → 5 KPIs: Total, Novos, Recorrentes, Revendedores Ativos, Estados Alcançados.
+  - `'Novo'` → 3 KPIs: Novos, Revendedores Ativos, Estados Alcançados.
+  - `'Recorrente'` → 3 KPIs: Recorrentes, Revendedores Ativos, Estados Alcançados.
 - `stats.estadosAlcancados`: conta valores únicos de `a.estado` (campo livre, não `estadoUf`).
 - `stats.mediaPorDia`: `total / diasUnicos.size`. Zero se nenhum dia único.
 
@@ -61,20 +83,21 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 
 | ano | mes | mode | Tipo de chart |
 |---|---|---|---|
-| `'Todos'` | qualquer | `'todos'` | Linha(s) por todos os meses do dataset |
-| `≠ 'Todos'` | `'Todos'` | `'ano'` | Linha 12 meses do ano + linha tracejada do ano anterior |
+| `'Todos'` | qualquer | `'todos'` | Linhas por todos os meses do dataset |
+| `≠ 'Todos'` | `'Todos'` | `'ano'` | Linha de 12 meses do ano + linha tracejada do ano anterior |
 | `≠ 'Todos'` | `≠ 'Todos'` | `'mes'` | Barras: mês atual vs mesmo mês do ano anterior |
 
-- `EvolutionResult`: `{ mode, option: EChartsOption | null, tag: string | null, hasData: boolean }`
+- `EvolutionResult`: `{ mode, option: EChartsOption | null, tag: string | null, hasData: boolean }`.
 - Filtro `status` afeta quais séries aparecem (Novo/Recorrente/ambos).
-- Cores: `Todos='#A29BFE'`, `Novo='#00D68F'`, `Recorrente='#FFA44F'`.
+- Cores vêm de `STATUS_COLOR` em `chartTheme.ts`.
+- Helpers internos puros: `statusToLabel`, `countByStatus`, `makeTooltipFormatter`, `evolutionBase`, `categoryAxis`, `valueAxis`, `lineSeries`.
 
 ### `useGraficosResumo`
 - Usa `useAtendimentos()` (filtrado) + `useDistribuicao().weekday`.
 - Retorna: `donutData`, `donutOption`, `weekdayOption`.
-- `donutOption`: `EChartsOption | null`. `null` se `total === 0`. Renderiza PieChart Novo vs Recorrente.
-- `weekdayOption`: sempre retorna `EChartsOption` (nunca null). BarChart Seg→Sex.
-- Helper local `darkBase()` define tema escuro para tooltip/textStyle. Duplicado em `useEvolucao` (dívida conhecida).
+- `donutOption`: `EChartsOption | null`. `null` se `total === 0`. Renderiza PieChart Novo vs Recorrente com label central no donut.
+- `weekdayOption`: sempre retorna `EChartsOption` (nunca null). BarChart Seg→Sex com gradiente accent.
+- Tema/cores vêm de `chartTheme.ts` (`chartBase`, `chartTooltip`, `CHART_COLORS`, helpers de eixo).
 
 ### `useRanking(limit = 5)`
 - Usa `useAtendimentos()` (filtrado).
@@ -94,48 +117,109 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 - **Único composable com side effect**: chama service, muta stores.
 - **NÃO é singleton**. Cada instância cria `carregando` e `erro` independentes.
 - Instâncias ativas: `DashboardUploadScreen` (lê `carregando`/`erro`), `DashboardTopbar` (usa apenas `reset()`).
-- **Não ler `carregando`/`erro` da instância do Topbar** — não reflete o estado real.
+- **Não ler `carregando`/`erro` da instância do Topbar** — não reflete o estado real do upload.
 - `carregar(file)`:
-  1. `filtrosStore.limpar()`
-  2. `atendimentoService.lerArquivo(file)` (pode lançar)
-  3. Valida `atendimentos.length > 0`; se não → `throw new Error('A planilha não contém registros válidos.')`
-  4. `atendimentosStore.setAtendimentos(items, file.name)`
-  5. `filtrosStore.ajustarParaDados(items)`
+  1. `atendimentoService.lerArquivo(file)` (pode lançar).
+  2. Valida `atendimentos.length > 0`; se não → `throw new Error('A planilha não contém registros válidos.')`.
+  3. `filtrosStore.limpar()`.
+  4. `atendimentosStore.setAtendimentos(items, file.name)`.
+  5. `filtrosStore.ajustarParaDados(items)`.
   - Erros capturados em `erro.value` (string). Não relança.
 - `reset()`: `atendimentosStore.limpar()` + `filtrosStore.limpar()` + `erro.value = null`.
 
 ---
 
-## Cores ECharts (hardcoded — dívida)
+## Dependências reais
 
-Valores duplicados entre composables e tokens `@theme` em `style.css`:
-
-| Hex | Token `@theme` | Uso |
-|---|---|---|
-| `#00D68F` | `jet-green` | Novo |
-| `#FFA44F` | `jet-orange` | Recorrente |
-| `#A29BFE` | `accent-light` | Total/Todos (linhas) |
-| `#6C5CE7` | `accent` | Weekday bars (gradiente) |
-| `#F0F2F8` | `text-primary` | textStyle |
-| `#8B92A8` | `text-secondary` | axisLabel, legend |
-| `#181D29` | `bg-card-hover` | tooltip background |
-| `#2A3044` | `border-light` | tooltip border, axisLine |
-| `#1E2433` | `border` | splitLine |
-| `#12161F` | `bg-card` | item border (separação) |
-
-Se tokens de `style.css` mudarem, atualizar manualmente nos composables.
+| Composable | Importa |
+|---|---|
+| `useAtendimentos` | `vue`, `pinia`, stores, `types` |
+| `useAtendimentoFilters` | `vue`, `pinia`, stores |
+| `useKpis` | `useAtendimentos`, `useFiltrosAtendimentoStore` |
+| `useDistribuicao` | `useAtendimentos`, `utils/grouping`, `utils/dateHelpers` |
+| `useRanking` | `useAtendimentos`, `useFiltrosAtendimentoStore`, `utils/grouping` |
+| `useGraficosResumo` | `useAtendimentos`, `useDistribuicao`, `utils/chartTheme` |
+| `useEvolucao` | `useAtendimentosStore`, `useFiltrosAtendimentoStore`, `utils/dateHelpers`, `utils/chartTheme`, `types` |
+| `useExcelUpload` | `services/atendimentoService`, ambos os stores |
 
 ---
 
-## Quando criar novo composable
+## Invariantes obrigatórias
 
-- Derivação de dados filtrados → consumir `useAtendimentos()`.
-- Dataset completo (comparações inter-anuais) → `storeToRefs(useAtendimentosStore())` direto. **Documentar o motivo no arquivo.**
-- Produz `EChartsOption` → registrar o chart type em `BaseChart.vue use([...])` antes de testar.
-- Manter helper de tooltip local (`darkBase()`) até refatoração centralizadora ser feita.
+1. **`useAtendimentos` é a porta única para dados filtrados**. Exceção: `useEvolucao`.
+2. **Cores ECharts via `chartTheme.ts`**. Hex literal direto em composable é proibido.
+3. **`EChartsOption` em `computed`**. Função síncrona no template quebra reatividade do VChart.
+4. **Composables não importam service**. Exceção: `useExcelUpload`.
+5. **`useExcelUpload` não é singleton**. Cada instância tem ref local — não compartilhar `carregando`/`erro` entre instâncias.
 
-## Riscos
+---
+
+## Acoplamentos críticos
+
+| Acoplamento | Risco |
+|---|---|
+| `Kpi` type exportado de `useKpis` → consumido por `KpiCard` | Mover type quebra `KpiCard` |
+| `useGraficosResumo` consome `useDistribuicao().weekday` | Remover `weekday` quebra `weekdayOption` |
+| `useEvolucao` ↔ raw store | Adicionar filtro a essa via mascara comparações inter-anuais |
+| `chartTheme` ↔ tokens `@theme` em `style.css` | Divergência silenciosa entre dashboard e gráficos |
+
+---
+
+## Convenções implícitas
+
+- Composables que produzem gráfico retornam `option: computed<EChartsOption | null>`.
+- Composables que produzem dados tabulares retornam arrays via `computed<T[]>`.
+- Nomes em português (domínio do produto): `atendimentos`, `filtro`, `kpis`, `programas`, `impressoras`, `estados`, `weekday`.
+- `limit` é parâmetro do composable, não config global.
+
+---
+
+## Limitações reais
 
 - **Sem memoização entre composables**: cada um refiltra/reagrega independentemente. Em datasets grandes, duplica trabalho.
 - **Nenhum composable é defensivo**: assumem `Atendimento` bem formado. `mapExcelRows` é a única defesa.
-- **`estadoUf`/`estadoNome` são opcionais**: composables futuros que usarem esses campos devem tratar `undefined` explicitamente.
+- **`estadoUf`/`estadoNome` são opcionais**: composables futuros que usarem esses campos devem tratar `undefined`.
+
+---
+
+## Hotspots
+
+- **`useEvolucao` filtra `all` múltiplas vezes** para os mesmos `ym` em modos `'ano'` e `'todos'`. Em datasets grandes, considera-se memoizar por `ym` antes de consumir.
+- **`useKpis.stats`** executa 3 filter passes + sets em sequência. Aceito hoje.
+- **`useDistribuicao` instancia 4 computeds independentes** — um por dimensão. Pequeno duplicate de varredura.
+
+---
+
+## Anti-patterns
+
+| Anti-pattern | Consequência |
+|---|---|
+| Filtrar `atendimentosStore.atendimentos` direto | Filtros não se aplicam |
+| Construir `EChartsOption` em função síncrona | Não reage a mudanças |
+| Hex literal em composable | Desincroniza tema visual |
+| Importar service em composable que não é `useExcelUpload` | Quebra direção de dependência |
+| Acessar `carregando` da instância do Topbar | Estado fantasma |
+
+---
+
+## Regras de extensão
+
+- **Derivação de dados filtrados** → consumir `useAtendimentos()`.
+- **Dataset completo (comparações inter-anuais)** → `storeToRefs(useAtendimentosStore())` direto. **Documentar motivo.**
+- **Produz `EChartsOption`** → registrar chart type em `BaseChart.vue use([...])` antes de testar; consumir `chartTheme.ts`.
+- **Lógica de filtro nova** → estender `useAtendimentoFilters` (UI) ou `useAtendimentos` (regra), não duplicar.
+
+---
+
+## Relação com outros módulos
+
+```
+Componente Dashboard<X>
+  → composable de domínio
+       → useAtendimentos (filtrado) OU store raw (exceção)
+            → stores via storeToRefs
+       → utils (grouping, dateHelpers, chartTheme)
+useExcelUpload (lado de fora do fluxo de leitura)
+  → service
+  → ambos os stores
+```

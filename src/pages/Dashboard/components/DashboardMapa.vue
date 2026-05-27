@@ -4,17 +4,18 @@ import type { EChartsOption } from 'echarts'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseChart from '@/components/ui/BaseChart.vue'
 import { useAtendimentos } from '@/composables/useAtendimentos'
-import { UF_TO_ESTADO, resolverNomeEstado } from '@/utils/estadoMap'
+import { ESTADOS_BRASIL, resolverNomeEstado } from '@/utils/estadoMap'
+import { CHART_COLORS, MAP_COLORS, chartTooltip } from '@/utils/chartTheme'
 
 type TipoMapa = 'sublimador' | 'revenda'
 
+const TIPOS: { label: string; value: TipoMapa }[] = [
+  { label: 'Sublimador', value: 'sublimador' },
+  { label: 'Revenda', value: 'revenda' },
+]
+
 const tipo = ref<TipoMapa>('sublimador')
 const { atendimentos } = useAtendimentos()
-
-const ESTADOS_BRASIL = Object.values(UF_TO_ESTADO)
-const HIGHLIGHT_COLORS = ['#6C5CE7', '#8174E9', '#A29BFE']
-const HAS_DATA_COLOR = '#3D3A5C'
-const NEUTRAL_COLOR = '#1A1F2E'
 
 const totaisPorEstado = computed<Map<string, number>>(() => {
   const counts = new Map<string, number>()
@@ -41,21 +42,19 @@ const option = computed<EChartsOption | null>(() => {
     const value = counts.get(nome) ?? 0
     const idx = top.indexOf(nome)
     const areaColor =
-      idx >= 0 ? HIGHLIGHT_COLORS[idx] : value > 0 ? HAS_DATA_COLOR : NEUTRAL_COLOR
+      idx >= 0 ? MAP_COLORS.highlight[idx] : value > 0 ? MAP_COLORS.hasData : MAP_COLORS.neutral
     return { name: nome, value, itemStyle: { areaColor } }
   })
 
   return {
     backgroundColor: 'transparent',
     tooltip: {
+      ...chartTooltip(),
       trigger: 'item',
-      backgroundColor: '#181D29',
-      borderColor: '#2A3044',
-      textStyle: { color: '#F0F2F8', fontFamily: 'DM Sans, sans-serif' },
       formatter: (params: unknown) => {
         const p = params as { name: string; value: number | undefined }
         const v = Number(p.value) || 0
-        return `<div style="font-weight:600">${p.name}</div><div style="margin-top:4px;color:#8B92A8">${v.toLocaleString('pt-BR')} atendimento${v === 1 ? '' : 's'}</div>`
+        return `<div style="font-weight:600">${p.name}</div><div style="margin-top:4px;color:${CHART_COLORS.textSecondary}">${v.toLocaleString('pt-BR')} atendimento${v === 1 ? '' : 's'}</div>`
       },
     },
     series: [
@@ -70,13 +69,13 @@ const option = computed<EChartsOption | null>(() => {
         aspectScale: 0.88,
         label: { show: false },
         itemStyle: {
-          areaColor: NEUTRAL_COLOR,
-          borderColor: '#2A3044',
+          areaColor: MAP_COLORS.neutral,
+          borderColor: MAP_COLORS.border,
           borderWidth: 1,
         },
         emphasis: {
           label: { show: false },
-          itemStyle: { borderColor: '#A29BFE', borderWidth: 1.5 },
+          itemStyle: { borderColor: MAP_COLORS.emphasisBorder, borderWidth: 1.5 },
         },
         select: { disabled: true },
         data,
@@ -93,14 +92,14 @@ const option = computed<EChartsOption | null>(() => {
         <h3 class="text-[13px] font-bold uppercase tracking-[1px] text-text-secondary">Mapa</h3>
         <div class="flex items-center gap-0.5 bg-bg-elevated rounded-lg p-0.5 border border-border">
           <button
-            v-for="opt in [{ label: 'Sublimador', value: 'sublimador' }, { label: 'Revenda', value: 'revenda' }]"
+            v-for="opt in TIPOS"
             :key="opt.value"
             type="button"
             class="px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all"
             :class="tipo === opt.value
               ? 'bg-bg-card text-text-primary shadow-sm'
               : 'text-text-muted hover:text-text-secondary'"
-            @click="tipo = opt.value as TipoMapa"
+            @click="tipo = opt.value"
           >
             {{ opt.label }}
           </button>

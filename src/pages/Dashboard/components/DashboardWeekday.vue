@@ -8,6 +8,6 @@ const { weekdayOption } = useGraficosResumo()
 
 <template>
   <BaseCard title="Atendimentos por Dia da Semana" class="animate-fade-up">
-    <BaseChart :option="weekdayOption" height="130px" />
+    <BaseChart :option="weekdayOption" height="180px" />
   </BaseCard>
 </template>

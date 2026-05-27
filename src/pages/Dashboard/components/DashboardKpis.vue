@@ -13,7 +13,7 @@ const gridCols = computed(() =>
 </script>
 
 <template>
-  <section :class="['grid gap-4 mb-7', gridCols]">
+  <section :class="['grid gap-5 mb-7', gridCols]">
     <KpiCard v-for="(kpi, i) in kpis" :key="kpi.label" :kpi="kpi" :delay="i + 1" />
   </section>
 </template>

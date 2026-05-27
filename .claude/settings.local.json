@@ -31,7 +31,8 @@
       "PowerShell($path = \"c:\\\\Users\\\\Leonardo Medeiros\\\\Desktop\\\\VueJs - Vite\\\\dashboard-jetink\\\\src\\\\assets\\\\maps\\\\brazil-states.json\"; $text = Get-Content $path -Raw -Encoding UTF8; $json = $text | ConvertFrom-Json; Write-Host \"Features: $\\($json.features.Count\\)\"; $json.features | ForEach-Object { Write-Host \"  $\\($_.properties.name\\)\" })",
       "Bash(node -e \"const s = require\\('fs'\\).readFileSync\\('src/utils/estadoMap.ts','utf8'\\); const line = s.split\\('\\\\n'\\)[45]; console.log\\(JSON.stringify\\(line\\)\\);\")",
       "Bash(node -e \"console.log\\('São Paulo'.normalize\\('NFD'\\).replace\\(/[̀-ͯ]/g, ''\\).toLowerCase\\(\\)\\)\")",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(echo \"EXIT=$?\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\Leonardo Medeiros\\.claude\\projects\\c--Users-Leonardo-Medeiros-Desktop-VueJs---Vite-dashboard-jetink\\memory"

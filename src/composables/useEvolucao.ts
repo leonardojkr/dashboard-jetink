@@ -4,6 +4,15 @@ import type { EChartsOption } from 'echarts'
 import { useAtendimentosStore } from '@/stores/useAtendimentosStore'
 import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
 import { MONTH_NAMES, buildYm, previousYear } from '@/utils/dateHelpers'
+import {
+  CHART_COLORS,
+  STATUS_COLOR,
+  chartBase,
+  chartTooltip,
+  axisLabelStyle,
+  categoryAxisLine,
+  valueSplitLine,
+} from '@/utils/chartTheme'
 import type { Atendimento, StatusFiltro } from '@/types/Atendimento'
 
 type Mode = 'todos' | 'ano' | 'mes'
@@ -15,17 +24,12 @@ interface EvolutionResult {
   hasData: boolean
 }
 
-const COLOR_NOVO = '#00D68F'
-const COLOR_REC = '#FFA44F'
-const COLOR_BY_STATUS: Record<StatusFiltro, string> = {
-  Todos: '#A29BFE',
-  Novo: COLOR_NOVO,
-  Recorrente: COLOR_REC,
-}
-
-function countByStatus(rows: Atendimento[], status: StatusFiltro): number {
-  if (status === 'Todos') return rows.length
-  return rows.filter((r) => r.status === status).length
+interface TooltipParam {
+  name?: string
+  value?: number | null
+  seriesName?: string
+  seriesIndex?: number
+  marker?: string
 }
 
 function statusToLabel(status: StatusFiltro): string | null {
@@ -33,22 +37,27 @@ function statusToLabel(status: StatusFiltro): string | null {
   return status === 'Novo' ? 'Novos' : 'Recorrentes'
 }
 
+function countByStatus(rows: Atendimento[], status: StatusFiltro): number {
+  if (status === 'Todos') return rows.length
+  return rows.filter((r) => r.status === status).length
+}
+
 function makeTooltipFormatter(statusLabel: string | null) {
   return (params: unknown) => {
-    const p = Array.isArray(params) ? params : [params]
-    const valid = p
-      .filter((item: any) => item.value !== null && item.value !== undefined)
-      .sort((a: any, b: any) => a.seriesIndex - b.seriesIndex)
+    const list = (Array.isArray(params) ? params : [params]) as TooltipParam[]
+    const valid = list
+      .filter((item) => item.value !== null && item.value !== undefined)
+      .sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0))
     if (!valid.length) return ''
 
-    const month = (valid[0] as any)?.name ?? ''
+    const month = valid[0].name ?? ''
     const header = statusLabel ? `${month} — ${statusLabel}` : month
 
     const rows = valid
-      .map((item: any) => {
-        const seriesName = String(item.seriesName)
+      .map((item) => {
+        const seriesName = String(item.seriesName ?? '')
         const label = seriesName.includes(' — ') ? seriesName.split(' — ')[0] : seriesName
-        return `<div style="display:flex;justify-content:space-between;gap:24px;line-height:1.8"><span>${item.marker}${label}</span><span style="font-weight:600">${item.value}</span></div>`
+        return `<div style="display:flex;justify-content:space-between;gap:24px;line-height:1.8"><span>${item.marker ?? ''}${label}</span><span style="font-weight:600">${item.value}</span></div>`
       })
       .join('')
 
@@ -56,17 +65,47 @@ function makeTooltipFormatter(statusLabel: string | null) {
   }
 }
 
-function baseTheme(): Partial<EChartsOption> {
+function evolutionBase(): Partial<EChartsOption> {
   return {
-    backgroundColor: 'transparent',
-    textStyle: { color: '#F0F2F8', fontFamily: 'DM Sans, sans-serif' },
+    ...chartBase(),
     grid: { left: 40, right: 12, top: 16, bottom: 52, containLabel: false },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: '#181D29',
-      borderColor: '#2A3044',
-      textStyle: { color: '#F0F2F8' },
-    },
+    tooltip: { ...chartTooltip(), trigger: 'axis' },
+  }
+}
+
+function categoryAxis(data: string[], rotate = 0) {
+  return {
+    type: 'category' as const,
+    data,
+    axisLine: categoryAxisLine(),
+    axisLabel: { ...axisLabelStyle(), rotate, interval: 0 as const },
+    boundaryGap: false,
+  }
+}
+
+function valueAxis() {
+  return {
+    type: 'value' as const,
+    axisLine: { show: false },
+    splitLine: valueSplitLine(),
+    axisLabel: axisLabelStyle(),
+  }
+}
+
+function lineSeries(name: string, data: (number | null)[], color: string, opts: { dashed?: boolean; small?: boolean } = {}) {
+  const isDashed = opts.dashed === true
+  return {
+    name,
+    type: 'line' as const,
+    data,
+    smooth: false,
+    symbol: 'circle' as const,
+    symbolSize: opts.small ? 6 : isDashed ? 6 : 7,
+    lineStyle: isDashed
+      ? { color, width: 1.5, type: 'dashed' as const, opacity: 0.5 }
+      : { color, width: 2.5 },
+    itemStyle: { color, borderColor: CHART_COLORS.bgCard, borderWidth: 2, ...(isDashed ? { opacity: 0.55 } : {}) },
+    connectNulls: true,
   }
 }
 
@@ -80,27 +119,13 @@ export function useEvolucao() {
     const { ano, mes, status } = filtro.value
     if (ano !== 'Todos' && mes !== 'Todos') return buildBarComparison(atendimentos.value, ano, mes, status)
     if (ano !== 'Todos') return buildYearLine(atendimentos.value, ano, status)
-    return buildAllMonthsBars(atendimentos.value, status)
+    return buildAllMonthsLine(atendimentos.value, status)
   })
 
   return { resultado }
 }
 
-function makeLine(name: string, data: number[], color: string) {
-  return {
-    name,
-    type: 'line' as const,
-    data,
-    smooth: false,
-    symbol: 'circle',
-    symbolSize: 7,
-    lineStyle: { color, width: 2.5 },
-    itemStyle: { color, borderColor: '#12161F', borderWidth: 2 },
-    connectNulls: true,
-  }
-}
-
-function buildAllMonthsBars(all: Atendimento[], status: StatusFiltro): EvolutionResult {
+function buildAllMonthsLine(all: Atendimento[], status: StatusFiltro): EvolutionResult {
   const monthsSet = new Set<string>()
   for (const a of all) monthsSet.add(a.ym)
   const months = [...monthsSet].sort()
@@ -122,7 +147,6 @@ function buildAllMonthsBars(all: Atendimento[], status: StatusFiltro): Evolution
     totais.push(n + r)
   }
 
-  // Detect year transitions to adjust label rotation and grid spacing
   let hasMultipleYears = false
   for (let i = 1; i < months.length; i++) {
     if (months[i].split('-')[0] !== months[i - 1].split('-')[0]) {
@@ -132,19 +156,13 @@ function buildAllMonthsBars(all: Atendimento[], status: StatusFiltro): Evolution
   }
 
   const series: NonNullable<EChartsOption['series']> = []
-  if (status === 'Todos') {
-    series.push(makeLine('Atendimentos', totais, COLOR_BY_STATUS.Todos))
-  }
-  if (status !== 'Recorrente') {
-    series.push(makeLine('Novos', novos, COLOR_NOVO))
-  }
-  if (status !== 'Novo') {
-    series.push(makeLine('Recorrentes', recorrentes, COLOR_REC))
-  }
+  if (status === 'Todos') series.push(lineSeries('Atendimentos', totais, STATUS_COLOR.Todos))
+  if (status !== 'Recorrente') series.push(lineSeries('Novos', novos, CHART_COLORS.novo))
+  if (status !== 'Novo') series.push(lineSeries('Recorrentes', recorrentes, CHART_COLORS.recorrente))
 
   const distinctYears = [...new Set(months.map((ym) => ym.split('-')[0]))]
   const tag = distinctYears.length > 1
-    ? distinctYears[0] + ' — ' + distinctYears[distinctYears.length - 1]
+    ? `${distinctYears[0]} — ${distinctYears[distinctYears.length - 1]}`
     : null
 
   return {
@@ -152,26 +170,12 @@ function buildAllMonthsBars(all: Atendimento[], status: StatusFiltro): Evolution
     tag,
     hasData: months.length > 0,
     option: {
-      ...baseTheme(),
-      tooltip: {
-        ...(baseTheme().tooltip as object),
-        formatter: makeTooltipFormatter(statusToLabel(status)),
-      },
+      ...evolutionBase(),
+      tooltip: { ...chartTooltip(), trigger: 'axis', formatter: makeTooltipFormatter(statusToLabel(status)) },
       grid: { left: 40, right: 12, top: 16, bottom: hasMultipleYears ? 92 : 60, containLabel: false },
-      legend: { textStyle: { color: '#8B92A8' }, bottom: 0 },
-      xAxis: {
-        type: 'category',
-        data: labels,
-        axisLine: { lineStyle: { color: '#2A3044' } },
-        axisLabel: { color: '#8B92A8', rotate: hasMultipleYears ? 40 : 0, interval: 0 },
-        boundaryGap: false,
-      },
-      yAxis: {
-        type: 'value',
-        axisLine: { show: false },
-        splitLine: { lineStyle: { color: '#1E2433' } },
-        axisLabel: { color: '#8B92A8' },
-      },
+      legend: { textStyle: { color: CHART_COLORS.textSecondary }, bottom: 0 },
+      xAxis: categoryAxis(labels, hasMultipleYears ? 40 : 0),
+      yAxis: valueAxis(),
       series,
     },
   }
@@ -200,34 +204,14 @@ function buildYearLine(all: Atendimento[], year: string, status: StatusFiltro): 
     return { mode: 'ano', tag: null, hasData: false, option: null }
   }
 
-  const color = COLOR_BY_STATUS[status]
+  const color = STATUS_COLOR[status]
   const statusLabel = status === 'Novo' ? 'Novos' : status === 'Recorrente' ? 'Recorrentes' : 'Total'
 
   const series: NonNullable<EChartsOption['series']> = [
-    {
-      name: `${year} — ${statusLabel}`,
-      type: 'line',
-      data: curVals,
-      smooth: false,
-      symbol: 'circle',
-      symbolSize: 8,
-      lineStyle: { color, width: 2.5 },
-      itemStyle: { color, borderColor: '#12161F', borderWidth: 2 },
-      connectNulls: true,
-    },
+    lineSeries(`${year} — ${statusLabel}`, curVals, color, { small: true }),
   ]
   if (hasPrev) {
-    series.push({
-      name: prevYear,
-      type: 'line',
-      data: prevVals,
-      smooth: false,
-      symbol: 'circle',
-      symbolSize: 6,
-      lineStyle: { color, width: 1.5, type: 'dashed', opacity: 0.5 },
-      itemStyle: { color, opacity: 0.55, borderColor: '#12161F', borderWidth: 2 },
-      connectNulls: true,
-    })
+    series.push(lineSeries(prevYear, prevVals, color, { dashed: true }))
   }
 
   return {
@@ -235,26 +219,12 @@ function buildYearLine(all: Atendimento[], year: string, status: StatusFiltro): 
     tag: hasPrev ? `${year} vs ${prevYear}` : year,
     hasData: true,
     option: {
-      ...baseTheme(),
-      tooltip: {
-        ...(baseTheme().tooltip as object),
-        formatter: makeTooltipFormatter(statusToLabel(status)),
-      },
+      ...evolutionBase(),
+      tooltip: { ...chartTooltip(), trigger: 'axis', formatter: makeTooltipFormatter(statusToLabel(status)) },
       grid: { left: 40, right: 12, top: 16, bottom: 72, containLabel: false },
-      legend: { textStyle: { color: '#8B92A8' }, bottom: 0 },
-      xAxis: {
-        type: 'category',
-        data: [...MONTH_NAMES],
-        axisLine: { lineStyle: { color: '#2A3044' } },
-        axisLabel: { color: '#8B92A8', rotate: 30, interval: 0 },
-        boundaryGap: false,
-      },
-      yAxis: {
-        type: 'value',
-        axisLine: { show: false },
-        splitLine: { lineStyle: { color: '#1E2433' } },
-        axisLabel: { color: '#8B92A8' },
-      },
+      legend: { textStyle: { color: CHART_COLORS.textSecondary }, bottom: 0 },
+      xAxis: categoryAxis([...MONTH_NAMES], 30),
+      yAxis: valueAxis(),
       series,
     },
   }
@@ -279,7 +249,6 @@ function buildBarComparison(all: Atendimento[], year: string, ym: string, status
   const prev = bucket(prevYm)
 
   const labels = [`${mLabel} ${year}`, `${mLabel} ${prevYear}`]
-
   const novosData = [cur.novos, prev.novos]
   const recData = [cur.recorrentes, prev.recorrentes]
 
@@ -289,7 +258,7 @@ function buildBarComparison(all: Atendimento[], year: string, ym: string, status
       name: 'Novos',
       type: 'bar',
       data: novosData,
-      itemStyle: { color: COLOR_NOVO, borderRadius: [4, 4, 0, 0] },
+      itemStyle: { color: CHART_COLORS.novo, borderRadius: [4, 4, 0, 0] },
     })
   }
   if (status !== 'Novo') {
@@ -297,7 +266,7 @@ function buildBarComparison(all: Atendimento[], year: string, ym: string, status
       name: 'Recorrentes',
       type: 'bar',
       data: recData,
-      itemStyle: { color: COLOR_REC, borderRadius: [4, 4, 0, 0] },
+      itemStyle: { color: CHART_COLORS.recorrente, borderRadius: [4, 4, 0, 0] },
     })
   }
 
@@ -306,20 +275,15 @@ function buildBarComparison(all: Atendimento[], year: string, ym: string, status
     tag: `${mLabel} ${year} vs ${mLabel} ${prevYear}`,
     hasData: cur.hasData || prev.hasData,
     option: {
-      ...baseTheme(),
-      legend: { textStyle: { color: '#8B92A8' }, bottom: 0 },
+      ...evolutionBase(),
+      legend: { textStyle: { color: CHART_COLORS.textSecondary }, bottom: 0 },
       xAxis: {
         type: 'category',
         data: labels,
-        axisLine: { lineStyle: { color: '#2A3044' } },
-        axisLabel: { color: '#8B92A8' },
+        axisLine: categoryAxisLine(),
+        axisLabel: axisLabelStyle(),
       },
-      yAxis: {
-        type: 'value',
-        axisLine: { show: false },
-        splitLine: { lineStyle: { color: '#1E2433' } },
-        axisLabel: { color: '#8B92A8' },
-      },
+      yAxis: valueAxis(),
       series,
     },
   }
