@@ -11,9 +11,11 @@ const { top, titulo, totalRevendedores, mostrarDetalhe } = useRanking(5)
   <BaseCard
     :title="titulo"
     :count="`${totalRevendedores} revendedores`"
-    class="animate-fade-up"
+    class="animate-fade-up h-full flex flex-col"
   >
-    <RankingList v-if="top.length" :items="top" :show-detail="mostrarDetalhe" />
-    <EmptyState v-else title="Sem revendedores registrados" />
+    <div class="flex-1 min-h-0 flex flex-col">
+      <RankingList v-if="top.length" :items="top" :show-detail="mostrarDetalhe" />
+      <EmptyState v-else title="Sem revendedores registrados" />
+    </div>
   </BaseCard>
 </template>
