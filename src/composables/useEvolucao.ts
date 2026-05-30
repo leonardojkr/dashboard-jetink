@@ -30,6 +30,19 @@ interface TooltipParam {
   seriesName?: string
   seriesIndex?: number
   marker?: string
+  dataIndex?: number
+}
+
+type SeriesDataLookup = Record<string, (number | null)[]>
+
+function deltaTag(current: number, prevData: (number | null)[] | undefined, dataIndex: number): string {
+  if (!prevData || dataIndex <= 0) return ''
+  const prev = prevData[dataIndex - 1]
+  if (prev === null || prev === undefined || prev === 0) return ''
+  const pct = Math.round(((current - prev) / prev) * 100)
+  const sign = pct > 0 ? '+' : ''
+  const color = pct > 0 ? CHART_COLORS.novo : pct < 0 ? '#FF5C7A' : CHART_COLORS.textSecondary
+  return ` <span style="font-size:11px;font-weight:400;color:${color}">(${sign}${pct}%)</span>`
 }
 
 function statusToLabel(status: StatusFiltro): string | null {
@@ -42,7 +55,7 @@ function countByStatus(rows: Atendimento[], status: StatusFiltro): number {
   return rows.filter((r) => r.status === status).length
 }
 
-function makeTooltipFormatter(statusLabel: string | null) {
+function makeTooltipFormatter(statusLabel: string | null, lookup?: SeriesDataLookup) {
   return (params: unknown) => {
     const list = (Array.isArray(params) ? params : [params]) as TooltipParam[]
     const valid = list
@@ -52,12 +65,15 @@ function makeTooltipFormatter(statusLabel: string | null) {
 
     const month = valid[0].name ?? ''
     const header = statusLabel ? `${month} — ${statusLabel}` : month
+    const dataIndex = valid[0].dataIndex ?? -1
 
     const rows = valid
       .map((item) => {
         const seriesName = String(item.seriesName ?? '')
         const label = seriesName.includes(' — ') ? seriesName.split(' — ')[0] : seriesName
-        return `<div style="display:flex;justify-content:space-between;gap:24px;line-height:1.8"><span>${item.marker ?? ''}${label}</span><span style="font-weight:600">${item.value}</span></div>`
+        const value = item.value ?? 0
+        const delta = lookup ? deltaTag(value, lookup[seriesName], dataIndex) : ''
+        return `<div style="display:flex;justify-content:space-between;gap:24px;line-height:1.8"><span>${item.marker ?? ''}${label}</span><span style="font-weight:600">${value}${delta}</span></div>`
       })
       .join('')
 
@@ -165,13 +181,19 @@ function buildAllMonthsLine(all: Atendimento[], status: StatusFiltro): Evolution
     ? `${distinctYears[0]} — ${distinctYears[distinctYears.length - 1]}`
     : null
 
+  const lookup: SeriesDataLookup = {
+    Atendimentos: totais,
+    Novos: novos,
+    Recorrentes: recorrentes,
+  }
+
   return {
     mode: 'todos',
     tag,
     hasData: months.length > 0,
     option: {
       ...evolutionBase(),
-      tooltip: { ...chartTooltip(), trigger: 'axis', formatter: makeTooltipFormatter(statusToLabel(status)) },
+      tooltip: { ...chartTooltip(), trigger: 'axis', formatter: makeTooltipFormatter(statusToLabel(status), lookup) },
       grid: { left: 40, right: 12, top: 16, bottom: hasMultipleYears ? 92 : 60, containLabel: false },
       legend: { textStyle: { color: CHART_COLORS.textSecondary }, bottom: 0 },
       xAxis: categoryAxis(labels, hasMultipleYears ? 40 : 0),
@@ -214,13 +236,18 @@ function buildYearLine(all: Atendimento[], year: string, status: StatusFiltro): 
     series.push(lineSeries(prevYear, prevVals, color, { dashed: true }))
   }
 
+  const lookup: SeriesDataLookup = {
+    [`${year} — ${statusLabel}`]: curVals,
+    ...(hasPrev ? { [prevYear]: prevVals } : {}),
+  }
+
   return {
     mode: 'ano',
     tag: hasPrev ? `${year} vs ${prevYear}` : year,
     hasData: true,
     option: {
       ...evolutionBase(),
-      tooltip: { ...chartTooltip(), trigger: 'axis', formatter: makeTooltipFormatter(statusToLabel(status)) },
+      tooltip: { ...chartTooltip(), trigger: 'axis', formatter: makeTooltipFormatter(statusToLabel(status), lookup) },
       grid: { left: 40, right: 12, top: 16, bottom: 72, containLabel: false },
       legend: { textStyle: { color: CHART_COLORS.textSecondary }, bottom: 0 },
       xAxis: categoryAxis([...MONTH_NAMES], 30),
