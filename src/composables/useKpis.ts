@@ -2,6 +2,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAtendimentos } from './useAtendimentos'
 import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
+import { resolverNomeEstado } from '@/utils/estadoMap'
 
 export interface Kpi {
   color: 'purple' | 'green' | 'orange' | 'blue' | 'pink'
@@ -28,7 +29,10 @@ export function useKpis() {
     for (const a of data) {
       diasUnicos.add(a.iso)
       if (a.revendedor) revendedoresUnicos.add(a.revendedor)
-      if (a.estado) estadosUnicos.add(a.estado)
+      if (a.estado) {
+        const nome = resolverNomeEstado(a.estado)
+        if (nome) estadosUnicos.add(nome)
+      }
     }
 
     const media = diasUnicos.size ? total / diasUnicos.size : 0
