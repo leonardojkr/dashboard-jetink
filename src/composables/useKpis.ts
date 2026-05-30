@@ -2,7 +2,10 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAtendimentos } from './useAtendimentos'
 import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
-import { resolverNomeEstado } from '@/utils/estadoMap'
+import { useMapaFiltroStore } from '@/stores/useMapaFiltroStore'
+import { resolverNomeEstado, ESTADOS_BRASIL } from '@/utils/estadoMap'
+
+const ESTADOS_VALIDOS = new Set(ESTADOS_BRASIL)
 
 export interface Kpi {
   color: 'purple' | 'green' | 'orange' | 'blue' | 'pink'
@@ -16,6 +19,7 @@ export function useKpis() {
   const { atendimentos } = useAtendimentos()
   const filtrosStore = useFiltrosAtendimentoStore()
   const { filtro } = storeToRefs(filtrosStore)
+  const { tipo: tipoMapa } = storeToRefs(useMapaFiltroStore())
 
   const stats = computed(() => {
     const data = atendimentos.value
@@ -26,12 +30,20 @@ export function useKpis() {
     const diasUnicos = new Set<string>()
     const revendedoresUnicos = new Set<string>()
     const estadosUnicos = new Set<string>()
+    const modoRevenda = tipoMapa.value === 'revenda'
+
     for (const a of data) {
       diasUnicos.add(a.iso)
-      if (a.revendedor) revendedoresUnicos.add(a.revendedor)
-      if (a.estado) {
-        const nome = resolverNomeEstado(a.estado)
-        if (nome) estadosUnicos.add(nome)
+      if (a.revendedor && a.revendedor !== '--') revendedoresUnicos.add(a.revendedor)
+
+      if (modoRevenda) {
+        const nome = a.estadoNome
+        if (nome && nome !== '--' && ESTADOS_VALIDOS.has(nome)) estadosUnicos.add(nome)
+      } else {
+        if (a.estado) {
+          const nome = resolverNomeEstado(a.estado)
+          if (nome) estadosUnicos.add(nome)
+        }
       }
     }
 
@@ -55,6 +67,15 @@ export function useKpis() {
     const s = stats.value
     const media = s.mediaPorDia.toFixed(1).replace('.', ',')
     const status = filtro.value.status
+    const subEstados =
+      tipoMapa.value === 'revenda' ? 'cobertura revenda' : 'cobertura sublimador'
+
+    const kpiEstados: Kpi = {
+      color: 'pink',
+      label: 'Estados Alcançados',
+      value: String(s.estadosAlcancados),
+      sub: subEstados,
+    }
 
     if (status === 'Todos') {
       return [
@@ -87,12 +108,7 @@ export function useKpis() {
           value: String(s.revendedoresAtivos),
           sub: 'no período selecionado',
         },
-        {
-          color: 'pink',
-          label: 'Estados Alcançados',
-          value: String(s.estadosAlcancados),
-          sub: 'cobertura nacional',
-        },
+        kpiEstados,
       ]
     }
 
@@ -110,12 +126,7 @@ export function useKpis() {
           value: String(s.revendedoresAtivos),
           sub: 'no período selecionado',
         },
-        {
-          color: 'pink',
-          label: 'Estados Alcançados',
-          value: String(s.estadosAlcancados),
-          sub: 'cobertura nacional',
-        },
+        kpiEstados,
       ]
     }
 
@@ -132,12 +143,7 @@ export function useKpis() {
         value: String(s.revendedoresAtivos),
         sub: 'no período selecionado',
       },
-      {
-        color: 'pink',
-        label: 'Estados Alcançados',
-        value: String(s.estadosAlcancados),
-        sub: 'cobertura nacional',
-      },
+      kpiEstados,
     ]
   })
 

@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import type { EChartsOption } from 'echarts'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseChart from '@/components/ui/BaseChart.vue'
 import { useAtendimentos } from '@/composables/useAtendimentos'
 import { ESTADOS_BRASIL, resolverNomeEstado } from '@/utils/estadoMap'
 import { CHART_COLORS, MAP_COLORS, chartTooltip } from '@/utils/chartTheme'
-
-type TipoMapa = 'sublimador' | 'revenda'
+import { useMapaFiltroStore } from '@/stores/useMapaFiltroStore'
+import type { TipoMapa } from '@/stores/useMapaFiltroStore'
 
 const TIPOS: { label: string; value: TipoMapa }[] = [
   { label: 'Sublimador', value: 'sublimador' },
   { label: 'Revenda', value: 'revenda' },
 ]
 
-const tipo = ref<TipoMapa>('sublimador')
+const { tipo } = storeToRefs(useMapaFiltroStore())
 const { atendimentos } = useAtendimentos()
 
 const totaisPorEstado = computed<Map<string, number>>(() => {

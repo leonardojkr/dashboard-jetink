@@ -32,7 +32,9 @@
       "Bash(node -e \"const s = require\\('fs'\\).readFileSync\\('src/utils/estadoMap.ts','utf8'\\); const line = s.split\\('\\\\n'\\)[45]; console.log\\(JSON.stringify\\(line\\)\\);\")",
       "Bash(node -e \"console.log\\('São Paulo'.normalize\\('NFD'\\).replace\\(/[̀-ͯ]/g, ''\\).toLowerCase\\(\\)\\)\")",
       "Bash(git add *)",
-      "Bash(echo \"EXIT=$?\")"
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(xargs ls -la)",
+      "Bash(npx tsc *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Leonardo Medeiros\\.claude\\projects\\c--Users-Leonardo-Medeiros-Desktop-VueJs---Vite-dashboard-jetink\\memory"
