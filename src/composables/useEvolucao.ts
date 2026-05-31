@@ -89,12 +89,12 @@ function evolutionBase(): Partial<EChartsOption> {
   }
 }
 
-function categoryAxis(data: string[], rotate = 0) {
+function categoryAxis(data: string[], rotate = 0, labelOpts: Record<string, unknown> = {}) {
   return {
     type: 'category' as const,
     data,
     axisLine: categoryAxisLine(),
-    axisLabel: { ...axisLabelStyle(), rotate, interval: 0 as const },
+    axisLabel: { ...axisLabelStyle(), rotate, interval: 0 as const, ...labelOpts },
     boundaryGap: false,
   }
 }
@@ -194,9 +194,9 @@ function buildAllMonthsLine(all: Atendimento[], status: StatusFiltro): Evolution
     option: {
       ...evolutionBase(),
       tooltip: { ...chartTooltip(), trigger: 'axis', formatter: makeTooltipFormatter(statusToLabel(status), lookup) },
-      grid: { left: 40, right: 12, top: 16, bottom: hasMultipleYears ? 92 : 60, containLabel: false },
+      grid: { left: 40, right: 12, top: 16, bottom: hasMultipleYears ? 97 : 56, containLabel: false },
       legend: { textStyle: { color: CHART_COLORS.textSecondary }, bottom: 0 },
-      xAxis: categoryAxis(labels, hasMultipleYears ? 40 : 0),
+      xAxis: categoryAxis(labels, hasMultipleYears ? 40 : 0, hasMultipleYears ? { align: 'right', margin: 10 } : {}),
       yAxis: valueAxis(),
       series,
     },
@@ -308,7 +308,7 @@ function buildBarComparison(all: Atendimento[], year: string, ym: string, status
         type: 'category',
         data: labels,
         axisLine: categoryAxisLine(),
-        axisLabel: axisLabelStyle(),
+        axisLabel: { ...axisLabelStyle(), rotate: 0, interval: 0, align: 'center' },
       },
       yAxis: valueAxis(),
       series,
