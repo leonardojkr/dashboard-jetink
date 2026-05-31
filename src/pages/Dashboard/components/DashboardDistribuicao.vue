@@ -3,7 +3,7 @@ import BaseCard from '@/components/ui/BaseCard.vue'
 import HBarList from '@/components/shared/HBarList.vue'
 import { useDistribuicao } from '@/composables/useDistribuicao'
 
-const { programas, impressoras, estados } = useDistribuicao(3)
+const { programas, impressoras, interestaduais } = useDistribuicao(3)
 </script>
 
 <template>
@@ -14,8 +14,8 @@ const { programas, impressoras, estados } = useDistribuicao(3)
     <BaseCard title="Impressoras" class="animate-fade-up">
       <HBarList :items="impressoras" tone="cyan" />
     </BaseCard>
-    <BaseCard title="Estados" class="animate-fade-up">
-      <HBarList :items="estados" tone="green" />
+    <BaseCard title="Interestaduais" class="animate-fade-up">
+      <HBarList :items="interestaduais" tone="green" />
     </BaseCard>
   </div>
 </template>

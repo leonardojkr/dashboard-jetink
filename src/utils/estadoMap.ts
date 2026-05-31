@@ -47,6 +47,21 @@ const NOME_NORMALIZADO_TO_NOME: Record<string, string> = Object.fromEntries(
   Object.values(UF_TO_ESTADO).map((nome) => [normalizar(nome), nome]),
 )
 
+const NOME_NORMALIZADO_TO_UF: Record<string, string> = Object.fromEntries(
+  Object.entries(UF_TO_ESTADO).map(([uf, nome]) => [normalizar(nome), uf]),
+)
+
+const INVALID_VALUES = new Set(['', '--'])
+
+export function resolveToUF(raw: string | undefined | null): string | null {
+  if (raw == null) return null
+  const trimmed = raw.trim()
+  if (!trimmed || INVALID_VALUES.has(trimmed)) return null
+  const upper = trimmed.toUpperCase()
+  if (UF_TO_ESTADO[upper]) return upper
+  return NOME_NORMALIZADO_TO_UF[normalizar(trimmed)] ?? null
+}
+
 export function resolverNomeEstado(raw: string): string | undefined {
   if (!raw) return undefined
   const trimmed = raw.trim()

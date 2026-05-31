@@ -34,7 +34,8 @@
       "Bash(git add *)",
       "Bash(echo \"EXIT=$?\")",
       "Bash(xargs ls -la)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(xargs grep -l \"groupBy\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\Leonardo Medeiros\\.claude\\projects\\c--Users-Leonardo-Medeiros-Desktop-VueJs---Vite-dashboard-jetink\\memory"
