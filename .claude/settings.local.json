@@ -35,7 +35,9 @@
       "Bash(echo \"EXIT=$?\")",
       "Bash(xargs ls -la)",
       "Bash(npx tsc *)",
-      "Bash(xargs grep -l \"groupBy\")"
+      "Bash(xargs grep -l \"groupBy\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Leleu7K\\\\Desktop\\\\dashboard-jetink\" -Force)",
+      "Bash(Select-Object Name, Mode)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Leonardo Medeiros\\.claude\\projects\\c--Users-Leonardo-Medeiros-Desktop-VueJs---Vite-dashboard-jetink\\memory"
