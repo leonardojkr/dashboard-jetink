@@ -35,14 +35,21 @@ interface TooltipParam {
 
 type SeriesDataLookup = Record<string, (number | null)[]>
 
-function deltaTag(current: number, prevData: (number | null)[] | undefined, dataIndex: number): string {
-  if (!prevData || dataIndex <= 0) return ''
-  const prev = prevData[dataIndex - 1]
+function deltaTag(current: number, prevData: (number | null)[] | undefined, dataIndex: number, prevOverride?: number | null): string {
+  let prev: number | null | undefined
+  if (dataIndex > 0) {
+    if (!prevData) return ''
+    prev = prevData[dataIndex - 1]
+  } else if (typeof prevOverride === 'number') {
+    prev = prevOverride
+  } else {
+    return ''
+  }
   if (prev === null || prev === undefined || prev === 0) return ''
   const pct = Math.round(((current - prev) / prev) * 100)
   const sign = pct > 0 ? '+' : ''
   const color = pct > 0 ? CHART_COLORS.novo : pct < 0 ? '#FF5C7A' : CHART_COLORS.textSecondary
-  return ` <span style="font-size:11px;font-weight:400;color:${color}">(${sign}${pct}%)</span>`
+  return `<span style="font-size:11px;font-weight:400;color:${color}">(${sign}${pct}%)</span>`
 }
 
 function statusToLabel(status: StatusFiltro): string | null {
@@ -55,7 +62,7 @@ function countByStatus(rows: Atendimento[], status: StatusFiltro): number {
   return rows.filter((r) => r.status === status).length
 }
 
-function makeTooltipFormatter(statusLabel: string | null, lookup?: SeriesDataLookup) {
+function makeTooltipFormatter(statusLabel: string | null, lookup?: SeriesDataLookup, firstIndexPrev?: Record<string, number | null>) {
   return (params: unknown) => {
     const list = (Array.isArray(params) ? params : [params]) as TooltipParam[]
     const valid = list
@@ -67,17 +74,20 @@ function makeTooltipFormatter(statusLabel: string | null, lookup?: SeriesDataLoo
     const header = statusLabel ? `${month} — ${statusLabel}` : month
     const dataIndex = valid[0].dataIndex ?? -1
 
-    const rows = valid
-      .map((item) => {
-        const seriesName = String(item.seriesName ?? '')
-        const label = seriesName.includes(' — ') ? seriesName.split(' — ')[0] : seriesName
-        const value = item.value ?? 0
-        const delta = lookup ? deltaTag(value, lookup[seriesName], dataIndex) : ''
-        return `<div style="display:flex;justify-content:space-between;gap:24px;line-height:1.8"><span>${item.marker ?? ''}${label}</span><span style="font-weight:600">${value}${delta}</span></div>`
-      })
-      .join('')
+    const cells = valid.flatMap((item) => {
+      const seriesName = String(item.seriesName ?? '')
+      const label = seriesName.includes(' — ') ? seriesName.split(' — ')[0] : seriesName
+      const value = item.value ?? 0
+      const prevOverride = dataIndex === 0 && firstIndexPrev ? firstIndexPrev[seriesName] : undefined
+      const delta = lookup ? deltaTag(value, lookup[seriesName], dataIndex, prevOverride) : ''
+      return [
+        `<span>${item.marker ?? ''}${label}</span>`,
+        `<span style="font-weight:600;text-align:right">${value}</span>`,
+        `<span style="text-align:right">${delta}</span>`,
+      ]
+    })
 
-    return `<div style="padding:2px 0"><div style="font-weight:600;margin-bottom:6px">${header}</div>${rows}</div>`
+    return `<div style="padding:2px 0"><div style="font-weight:600;margin-bottom:6px">${header}</div><div style="display:grid;grid-template-columns:1fr auto auto;column-gap:16px;align-items:center;line-height:1.8">${cells.join('')}</div></div>`
   }
 }
 
@@ -241,13 +251,17 @@ function buildYearLine(all: Atendimento[], year: string, status: StatusFiltro): 
     ...(hasPrev ? { [prevYear]: prevVals } : {}),
   }
 
+  const firstIndexPrev: Record<string, number | null> = hasPrev
+    ? { [`${year} — ${statusLabel}`]: prevVals[11] }
+    : {}
+
   return {
     mode: 'ano',
     tag: hasPrev ? `${year} vs ${prevYear}` : year,
     hasData: true,
     option: {
       ...evolutionBase(),
-      tooltip: { ...chartTooltip(), trigger: 'axis', formatter: makeTooltipFormatter(statusToLabel(status), lookup) },
+      tooltip: { ...chartTooltip(), trigger: 'axis', formatter: makeTooltipFormatter(statusToLabel(status), lookup, firstIndexPrev) },
       grid: { left: 40, right: 12, top: 16, bottom: 72, containLabel: false },
       legend: { textStyle: { color: CHART_COLORS.textSecondary }, bottom: 0 },
       xAxis: categoryAxis([...MONTH_NAMES], 30),
