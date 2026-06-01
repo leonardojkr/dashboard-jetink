@@ -34,7 +34,7 @@ export function useKpis() {
 
     for (const a of data) {
       diasUnicos.add(a.iso)
-      if (a.revendedor && a.revendedor !== '--') revendedoresUnicos.add(a.revendedor)
+      if (a.revendedor && a.revendedor !== '--' && a.revendedor !== 'Brinde') revendedoresUnicos.add(a.revendedor)
 
       if (modoRevenda) {
         const nome = a.estadoNome

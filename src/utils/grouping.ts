@@ -10,7 +10,7 @@ export interface GroupDetailEntry {
   recorrentes: number
 }
 
-const INVALID = new Set(['', '--'])
+const INVALID = new Set(['', '--', 'Brinde'])
 
 function normalize(value: unknown): string | null {
   if (value == null) return null
