@@ -9,7 +9,7 @@ const { resultado } = useEvolucao()
 
 <template>
   <BaseCard title="Evolução Mensal" :count="resultado.tag ?? undefined" class="mb-7 animate-fade-up" data-print="hide">
-    <BaseChart v-if="resultado.option && resultado.hasData" :option="resultado.option" height="225px" />
+    <BaseChart v-if="resultado.option && resultado.hasData" :key="resultado.mode" :option="resultado.option" height="225px" />
     <EmptyState v-else title="Sem dados no período selecionado" />
   </BaseCard>
 </template>

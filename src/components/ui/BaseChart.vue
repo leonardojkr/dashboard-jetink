@@ -52,6 +52,7 @@ withDefaults(defineProps<Props>(), {
 <template>
   <VChart
     :option="option"
+    :update-options="{ notMerge: true }"
     :autoresize="autoresize"
     :style="{ height }"
     class="w-full"
