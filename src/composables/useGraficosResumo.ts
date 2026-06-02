@@ -1,7 +1,10 @@
 import { computed } from 'vue'
 import type { EChartsOption } from 'echarts'
+import { storeToRefs } from 'pinia'
 import { useAtendimentos } from './useAtendimentos'
 import { useDistribuicao } from './useDistribuicao'
+import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
+import { useRelatorioStore } from '@/stores/useRelatorioStore'
 import {
   CHART_COLORS,
   chartBase,
@@ -12,7 +15,11 @@ import {
 } from '@/utils/chartTheme'
 
 export function useGraficosResumo() {
-  const { atendimentos } = useAtendimentos()
+  const { filtro: filtroGlobal } = storeToRefs(useFiltrosAtendimentoStore())
+  const relatorioStore = useRelatorioStore()
+
+  const filtroDonut = computed(() => relatorioStore.printFiltros?.['donut'] ?? filtroGlobal.value)
+  const { atendimentos } = useAtendimentos(filtroDonut)
   const { weekday } = useDistribuicao()
 
   const donutData = computed(() => {

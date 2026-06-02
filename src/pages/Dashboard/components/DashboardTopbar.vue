@@ -4,13 +4,27 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import { useAtendimentosStore } from '@/stores/useAtendimentosStore'
 import { useAtendimentoFilters } from '@/composables/useAtendimentoFilters'
 import { useExcelUpload } from '@/composables/useExcelUpload'
+import { useKpis } from '@/composables/useKpis'
+import { useRelatorioStore, KPI_LABEL_TO_STAT } from '@/stores/useRelatorioStore'
+import { useMapaFiltroStore } from '@/stores/useMapaFiltroStore'
 
 const { nomeArquivo } = storeToRefs(useAtendimentosStore())
-const { podeGerarRelatorio } = useAtendimentoFilters()
+const { podeGerarRelatorio, filtro } = useAtendimentoFilters()
 const { reset } = useExcelUpload()
+const { kpis } = useKpis()
+const relatorioStore = useRelatorioStore()
+const { tipo: tipoMapa } = storeToRefs(useMapaFiltroStore())
 
-function imprimir(): void {
-  window.print()
+function abrirModal(): void {
+  const configs = kpis.value.map((kpi) => ({
+    id: kpi.label.toLowerCase().replace(/\s+/g, '_'),
+    label: kpi.label,
+    color: kpi.color,
+    statKey: KPI_LABEL_TO_STAT[kpi.label] ?? 'total',
+    incluido: true,
+    filtro: { ...filtro.value },
+  }))
+  relatorioStore.abrirModal(configs, { ...filtro.value }, tipoMapa.value)
 }
 </script>
 
@@ -39,7 +53,7 @@ function imprimir(): void {
         {{ nomeArquivo }}
       </span>
       <BaseButton variant="secondary" @click="reset">↻ Nova Planilha</BaseButton>
-      <BaseButton variant="accent" :disabled="!podeGerarRelatorio" @click="imprimir">
+      <BaseButton variant="accent" :disabled="!podeGerarRelatorio" @click="abrirModal">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
           <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
           <rect x="6" y="14" width="12" height="8" />

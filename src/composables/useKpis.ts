@@ -2,8 +2,9 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAtendimentos } from './useAtendimentos'
 import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
-import { useMapaFiltroStore } from '@/stores/useMapaFiltroStore'
+import { useMapaFiltroStore, type TipoMapa } from '@/stores/useMapaFiltroStore'
 import { resolverNomeEstado, ESTADOS_BRASIL } from '@/utils/estadoMap'
+import type { Atendimento } from '@/types/Atendimento'
 
 const ESTADOS_VALIDOS = new Set(ESTADOS_BRASIL)
 
@@ -15,53 +16,65 @@ export interface Kpi {
   badge?: { tone: 'up' | 'down'; text: string }
 }
 
+export interface RawStats {
+  total: number
+  novos: number
+  recorrentes: number
+  mediaPorDia: number
+  revendedoresAtivos: number
+  estadosAlcancados: number
+  taxaRecorrencia: number
+  taxaNovos: number
+}
+
+export function computeRawStats(data: Atendimento[], tipoMapa: TipoMapa): RawStats {
+  const total = data.length
+  const novos = data.filter((a) => a.status === 'Novo').length
+  const recorrentes = data.filter((a) => a.status === 'Recorrente').length
+
+  const diasUnicos = new Set<string>()
+  const revendedoresUnicos = new Set<string>()
+  const estadosUnicos = new Set<string>()
+  const modoRevenda = tipoMapa === 'revenda'
+
+  for (const a of data) {
+    diasUnicos.add(a.iso)
+    if (a.revendedor && a.revendedor !== '--' && a.revendedor !== 'Brinde') revendedoresUnicos.add(a.revendedor)
+
+    if (modoRevenda) {
+      const nome = a.estadoNome
+      if (nome && nome !== '--' && ESTADOS_VALIDOS.has(nome)) estadosUnicos.add(nome)
+    } else {
+      if (a.estado) {
+        const nome = resolverNomeEstado(a.estado)
+        if (nome) estadosUnicos.add(nome)
+      }
+    }
+  }
+
+  const media = diasUnicos.size ? total / diasUnicos.size : 0
+  const taxaRecorrencia = total ? (recorrentes / total) * 100 : 0
+  const taxaNovos = total ? (novos / total) * 100 : 0
+
+  return {
+    total,
+    novos,
+    recorrentes,
+    mediaPorDia: media,
+    revendedoresAtivos: revendedoresUnicos.size,
+    estadosAlcancados: estadosUnicos.size,
+    taxaRecorrencia,
+    taxaNovos,
+  }
+}
+
 export function useKpis() {
   const { atendimentos } = useAtendimentos()
   const filtrosStore = useFiltrosAtendimentoStore()
   const { filtro } = storeToRefs(filtrosStore)
   const { tipo: tipoMapa } = storeToRefs(useMapaFiltroStore())
 
-  const stats = computed(() => {
-    const data = atendimentos.value
-    const total = data.length
-    const novos = data.filter((a) => a.status === 'Novo').length
-    const recorrentes = data.filter((a) => a.status === 'Recorrente').length
-
-    const diasUnicos = new Set<string>()
-    const revendedoresUnicos = new Set<string>()
-    const estadosUnicos = new Set<string>()
-    const modoRevenda = tipoMapa.value === 'revenda'
-
-    for (const a of data) {
-      diasUnicos.add(a.iso)
-      if (a.revendedor && a.revendedor !== '--' && a.revendedor !== 'Brinde') revendedoresUnicos.add(a.revendedor)
-
-      if (modoRevenda) {
-        const nome = a.estadoNome
-        if (nome && nome !== '--' && ESTADOS_VALIDOS.has(nome)) estadosUnicos.add(nome)
-      } else {
-        if (a.estado) {
-          const nome = resolverNomeEstado(a.estado)
-          if (nome) estadosUnicos.add(nome)
-        }
-      }
-    }
-
-    const media = diasUnicos.size ? total / diasUnicos.size : 0
-    const taxaRecorrencia = total ? (recorrentes / total) * 100 : 0
-    const taxaNovos = total ? (novos / total) * 100 : 0
-
-    return {
-      total,
-      novos,
-      recorrentes,
-      mediaPorDia: media,
-      revendedoresAtivos: revendedoresUnicos.size,
-      estadosAlcancados: estadosUnicos.size,
-      taxaRecorrencia,
-      taxaNovos,
-    }
-  })
+  const stats = computed(() => computeRawStats(atendimentos.value, tipoMapa.value))
 
   const kpis = computed<Kpi[]>(() => {
     const s = stats.value

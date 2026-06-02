@@ -39,7 +39,8 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Leleu7K\\\\Desktop\\\\dashboard-jetink\" -Force)",
       "Bash(Select-Object Name, Mode)",
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Leonardo Medeiros\\\\Desktop\\\\VueJs - Vite\\\\dashboard-jetink\" -Recurse -Directory | Where-Object { $_.Name -match '^\\(stores|composables|hooks|services|utils|components\\)$' })",
-      "Bash(xargs grep -l \"revendedor\")"
+      "Bash(xargs grep -l \"revendedor\")",
+      "Bash(npx vite *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Leonardo Medeiros\\.claude\\projects\\c--Users-Leonardo-Medeiros-Desktop-VueJs---Vite-dashboard-jetink\\memory"

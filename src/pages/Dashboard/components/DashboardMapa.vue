@@ -9,19 +9,25 @@ import { ESTADOS_BRASIL, resolverNomeEstado } from '@/utils/estadoMap'
 import { CHART_COLORS, MAP_COLORS, chartTooltip } from '@/utils/chartTheme'
 import { useMapaFiltroStore } from '@/stores/useMapaFiltroStore'
 import type { TipoMapa } from '@/stores/useMapaFiltroStore'
+import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
+import { useRelatorioStore } from '@/stores/useRelatorioStore'
 
 const TIPOS: { label: string; value: TipoMapa }[] = [
   { label: 'Sublimador', value: 'sublimador' },
   { label: 'Revenda', value: 'revenda' },
 ]
 
-const { tipo } = storeToRefs(useMapaFiltroStore())
-const { atendimentos } = useAtendimentos()
+const { tipo: tipoGlobal } = storeToRefs(useMapaFiltroStore())
+const { filtro: filtroGlobal } = storeToRefs(useFiltrosAtendimentoStore())
+const relatorioStore = useRelatorioStore()
+const filtroAtivo = computed(() => relatorioStore.printFiltros?.['mapa'] ?? filtroGlobal.value)
+const tipoAtivo = computed(() => relatorioStore.printTipoMapa ?? tipoGlobal.value)
+const { atendimentos } = useAtendimentos(filtroAtivo)
 
 const totaisPorEstado = computed<Map<string, number>>(() => {
   const counts = new Map<string, number>()
   for (const a of atendimentos.value) {
-    const key = tipo.value === 'sublimador' ? resolverNomeEstado(a.estado) : a.estadoNome
+    const key = tipoAtivo.value === 'sublimador' ? resolverNomeEstado(a.estado) : a.estadoNome
     if (!key) continue
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
@@ -97,10 +103,10 @@ const option = computed<EChartsOption | null>(() => {
             :key="opt.value"
             type="button"
             class="px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all"
-            :class="tipo === opt.value
+            :class="tipoGlobal === opt.value
               ? 'bg-bg-card text-text-primary shadow-sm'
               : 'text-text-muted hover:text-text-secondary'"
-            @click="tipo = opt.value"
+            @click="tipoGlobal = opt.value"
           >
             {{ opt.label }}
           </button>

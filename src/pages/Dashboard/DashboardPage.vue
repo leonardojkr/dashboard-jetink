@@ -13,6 +13,7 @@ import DashboardMapa from './components/DashboardMapa.vue'
 import DashboardDonut from './components/DashboardDonut.vue'
 import DashboardWeekday from './components/DashboardWeekday.vue'
 import DashboardDistribuicao from './components/DashboardDistribuicao.vue'
+import RelatorioModal from './components/RelatorioModal.vue'
 
 const { temDados } = storeToRefs(useAtendimentosStore())
 const { filtro } = storeToRefs(useFiltrosAtendimentoStore())
@@ -22,6 +23,7 @@ const { filtro } = storeToRefs(useFiltrosAtendimentoStore())
   <DashboardUploadScreen v-if="!temDados" />
 
   <div v-else>
+    <RelatorioModal />
     <DashboardTopbar />
 
     <main class="max-w-[1480px] mx-auto px-8 pt-7 pb-16">
@@ -31,16 +33,16 @@ const { filtro } = storeToRefs(useFiltrosAtendimentoStore())
       <DashboardEvolucao />
 
       <div class="grid grid-cols-1 lg:grid-cols-2 lg:min-h-[480px] gap-5 mb-7">
-        <DashboardRanking />
-        <DashboardMapa />
+        <div data-secao="ranking" class="h-full min-h-0"><DashboardRanking /></div>
+        <div data-secao="mapa" class="h-full min-h-0"><DashboardMapa /></div>
       </div>
 
       <div
         class="grid grid-cols-1 gap-5 mb-7"
         :class="{ 'lg:grid-cols-2': filtro.status === 'Todos' }"
       >
-        <DashboardDonut />
-        <DashboardWeekday />
+        <div data-secao="donut"><DashboardDonut /></div>
+        <div data-secao="weekday"><DashboardWeekday /></div>
       </div>
 
       <DashboardDistribuicao />

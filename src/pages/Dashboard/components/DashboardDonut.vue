@@ -6,9 +6,12 @@ import BaseChart from '@/components/ui/BaseChart.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import { useGraficosResumo } from '@/composables/useGraficosResumo'
 import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
+import { useRelatorioStore } from '@/stores/useRelatorioStore'
 
 const { donutOption, donutData } = useGraficosResumo()
-const { filtro } = storeToRefs(useFiltrosAtendimentoStore())
+const { filtro: filtroGlobal } = storeToRefs(useFiltrosAtendimentoStore())
+const relatorioStore = useRelatorioStore()
+const filtroAtivo = computed(() => relatorioStore.printFiltros?.['donut'] ?? filtroGlobal.value)
 
 function pct(value: number): string {
   if (!donutData.value.total) return '0'
@@ -22,7 +25,7 @@ const legenda = computed(() => [
 </script>
 
 <template>
-  <BaseCard v-if="filtro.status === 'Todos'" title="Novo vs Recorrente" class="animate-fade-up">
+  <BaseCard v-if="filtroAtivo.status === 'Todos'" title="Novo vs Recorrente" class="animate-fade-up">
     <div v-if="donutOption" class="flex items-center gap-8 justify-center">
       <BaseChart :option="donutOption" height="180px" class="!w-[180px]" />
       <ul class="flex flex-col gap-2.5">
