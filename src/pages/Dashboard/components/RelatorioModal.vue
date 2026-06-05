@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { computed, nextTick, watch, onUnmounted } from 'vue'
+import { computed, watch, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useRouter } from 'vue-router'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import { useRelatorioStore, type KpiRelatorioConfig } from '@/stores/useRelatorioStore'
 import { useAtendimentosStore } from '@/stores/useAtendimentosStore'
 import { useMapaFiltroStore } from '@/stores/useMapaFiltroStore'
+import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
 import { computeRawStats, type Kpi } from '@/composables/useKpis'
-import type { AtendimentoFiltro, StatusFiltro } from '@/types/Atendimento'
+import type { StatusFiltro } from '@/types/Atendimento'
 import { MONTH_NAMES } from '@/utils/dateHelpers'
+
+const router = useRouter()
 
 const relatorioStore = useRelatorioStore()
 const { atendimentos: todosAtendimentos } = storeToRefs(useAtendimentosStore())
 const { tipo: tipoMapa } = storeToRefs(useMapaFiltroStore())
+const { filtro: filtroGlobal } = storeToRefs(useFiltrosAtendimentoStore())
 
 watch(() => relatorioStore.modalAberto, (aberto) => {
   document.body.style.overflow = aberto ? 'hidden' : ''
@@ -28,40 +33,18 @@ const statusOptions = [
   { label: 'Recorrente', value: 'Recorrente' },
 ]
 
-const anoOptions = computed(() => {
-  const set = new Set<string>()
-  for (const a of todosAtendimentos.value) set.add(a.year)
-  return [
-    { label: 'Todos os Anos', value: 'Todos' },
-    ...[...set].sort().map((a) => ({ label: a, value: a })),
-  ]
+const periodoValido = computed(() => filtroGlobal.value.mes !== 'Todos')
+
+const periodoLabel = computed(() => {
+  const mes = filtroGlobal.value.mes
+  if (mes === 'Todos') return null
+  const [y, m] = mes.split('-')
+  return `${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`
 })
 
-function mesOptionsForAno(ano: string) {
-  const src =
-    ano === 'Todos' ? todosAtendimentos.value : todosAtendimentos.value.filter((a) => a.year === ano)
-  const set = new Set<string>()
-  for (const a of src) set.add(a.ym)
-  return [
-    { label: 'Todos os Meses', value: 'Todos' },
-    ...[...set].sort().map((ym) => {
-      const [y, m] = ym.split('-')
-      return { label: `${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`, value: ym }
-    }),
-  ]
-}
-
-function handleAnoChange(target: { filtro: AtendimentoFiltro }, newAno: string) {
-  target.filtro.ano = newAno
-  if (newAno !== 'Todos' && target.filtro.mes !== 'Todos') {
-    const validos = mesOptionsForAno(newAno).map((o) => o.value)
-    if (!validos.includes(target.filtro.mes)) target.filtro.mes = 'Todos'
-  }
-  if (newAno === 'Todos') target.filtro.mes = 'Todos'
-}
-
 function filtrarAtendimentos(config: KpiRelatorioConfig) {
-  const { ano, mes, status } = config.filtro
+  const { ano, mes } = config.filtro
+  const status = config.statusFixo ?? config.filtro.status
   return todosAtendimentos.value.filter((a) => {
     const okAno = ano === 'Todos' || a.year === ano
     const okMes = mes === 'Todos' || a.ym === mes
@@ -78,24 +61,13 @@ const previews = computed(() =>
   }),
 )
 
-function buildSubtitulo(config: KpiRelatorioConfig): string {
-  const { ano, mes, status } = config.filtro
-  const tags: string[] = []
-  if (ano !== 'Todos') tags.push(ano)
-  if (mes !== 'Todos') {
-    const [y, m] = mes.split('-')
-    tags.push(`${MONTH_NAMES[parseInt(m, 10) - 1]} ${y}`)
-  }
-  if (status !== 'Todos') tags.push(status === 'Novo' ? 'Novos' : 'Recorrentes')
-  return tags.length ? tags.join(' · ') : 'no período selecionado'
-}
-
 function buildKpiFromConfig(config: KpiRelatorioConfig, previewValue: string): Kpi {
   return {
     color: config.color,
     label: config.label,
     value: previewValue,
-    sub: buildSubtitulo(config),
+    sub: config.sub,
+    badge: config.badge,
   }
 }
 
@@ -120,7 +92,7 @@ const totalCards = computed(
   () => relatorioStore.kpisConfig.length + relatorioStore.secoesConfig.length,
 )
 
-async function confirmarEImprimir() {
+function confirmarEGerar() {
   const kpis = relatorioStore.kpisConfig
     .filter((c) => c.incluido)
     .map((c) => buildKpiFromConfig(c, previews.value[relatorioStore.kpisConfig.indexOf(c)]))
@@ -137,43 +109,9 @@ async function confirmarEImprimir() {
     }
   }
   relatorioStore.setPrintFiltros(filtrosMap)
-
-  const mapaSecao = relatorioStore.secoesConfig.find((s) => s.id === 'mapa')
-  if (mapaSecao?.incluido && mapaSecao.tipoMapa) {
-    relatorioStore.setPrintTipoMapa(mapaSecao.tipoMapa)
-  }
-
+  relatorioStore.setPrintPeriodo(periodoLabel.value ?? 'Todos os períodos')
   relatorioStore.fecharModal()
-
-  const cssRules: string[] = []
-  for (const secao of relatorioStore.secoesConfig) {
-    if (!secao.incluido) {
-      cssRules.push(`[data-secao="${secao.id}"] { display: none !important; }`)
-    } else if (secao.id === 'mapa') {
-      cssRules.push(`[data-secao="mapa"] [data-print="hide"] { display: block !important; }`)
-    }
-  }
-
-  let styleEl: HTMLStyleElement | null = null
-  if (cssRules.length) {
-    styleEl = document.createElement('style')
-    styleEl.setAttribute('media', 'print')
-    styleEl.textContent = cssRules.join('\n')
-    document.head.appendChild(styleEl)
-  }
-
-  await nextTick()
-  window.addEventListener(
-    'afterprint',
-    () => {
-      relatorioStore.clearKpisParaImprimir()
-      relatorioStore.clearPrintFiltros()
-      relatorioStore.clearPrintTipoMapa()
-      if (styleEl) document.head.removeChild(styleEl)
-    },
-    { once: true },
-  )
-  window.print()
+  router.push({ name: 'relatorio' })
 }
 
 const colorValueClass: Record<Kpi['color'], string> = {
@@ -204,7 +142,13 @@ const colorValueClass: Record<Kpi['color'], string> = {
           <div>
             <div class="font-semibold text-text-primary text-sm">Configurar Relatório</div>
             <div class="text-xs text-text-muted mt-0.5">
-              Escolha os cards e ajuste os filtros individualmente
+              <template v-if="periodoLabel">
+                Período:
+                <span class="font-medium text-text-secondary">{{ periodoLabel }}</span>
+              </template>
+              <template v-else>
+                <span class="text-jet-orange">Selecione um mês no dashboard para gerar o relatório</span>
+              </template>
             </div>
           </div>
           <button
@@ -270,23 +214,11 @@ const colorValueClass: Record<Kpi['color'], string> = {
               </span>
             </div>
 
+            <!-- KPIs de total: sem filtro de status. Outros KPIs: seletor de status. -->
             <div
-              v-if="config.incluido"
+              v-if="config.incluido && !config.statusFixo"
               class="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-border/40"
             >
-              <BaseSelect
-                :model-value="config.filtro.ano"
-                :options="anoOptions"
-                label="Ano"
-                @update:model-value="handleAnoChange(config, $event)"
-              />
-              <BaseSelect
-                :model-value="config.filtro.mes"
-                :options="mesOptionsForAno(config.filtro.ano)"
-                :disabled="config.filtro.ano === 'Todos'"
-                label="Mês"
-                @update:model-value="config.filtro.mes = $event"
-              />
               <BaseSelect
                 :model-value="config.filtro.status"
                 :options="statusOptions"
@@ -327,19 +259,6 @@ const colorValueClass: Record<Kpi['color'], string> = {
               v-if="config.incluido"
               class="flex flex-wrap items-center gap-3 mt-3 pt-3 border-t border-border/40"
             >
-              <BaseSelect
-                :model-value="config.filtro.ano"
-                :options="anoOptions"
-                label="Ano"
-                @update:model-value="handleAnoChange(config, $event)"
-              />
-              <BaseSelect
-                :model-value="config.filtro.mes"
-                :options="mesOptionsForAno(config.filtro.ano)"
-                :disabled="config.filtro.ano === 'Todos'"
-                label="Mês"
-                @update:model-value="config.filtro.mes = $event"
-              />
               <!-- Status locked for Novo vs Recorrente; normal dropdown for others -->
               <BaseSelect
                 v-if="config.statusFixo"
@@ -355,24 +274,6 @@ const colorValueClass: Record<Kpi['color'], string> = {
                 label="Status"
                 @update:model-value="config.filtro.status = $event as StatusFiltro"
               />
-              <!-- Tipo mapa toggle: only for the mapa section -->
-              <div v-if="config.id === 'mapa'" class="flex flex-col gap-1">
-                <span class="text-[10px] font-semibold uppercase tracking-[1px] text-text-muted">Tipo</span>
-                <div class="flex items-center gap-0.5 bg-bg-card rounded-lg p-0.5 border border-border">
-                  <button
-                    v-for="opt in [{ label: 'Sublimador', value: 'sublimador' }, { label: 'Revenda', value: 'revenda' }]"
-                    :key="opt.value"
-                    type="button"
-                    class="px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all"
-                    :class="config.tipoMapa === opt.value
-                      ? 'bg-bg-elevated text-text-primary shadow-sm'
-                      : 'text-text-muted hover:text-text-secondary'"
-                    @click="config.tipoMapa = opt.value as 'sublimador' | 'revenda'"
-                  >
-                    {{ opt.label }}
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -382,8 +283,8 @@ const colorValueClass: Record<Kpi['color'], string> = {
           <BaseButton variant="secondary" @click="relatorioStore.fecharModal()">Cancelar</BaseButton>
           <BaseButton
             variant="accent"
-            :disabled="totalIncluidos === 0"
-            @click="confirmarEImprimir"
+            :disabled="totalIncluidos === 0 || !periodoValido"
+            @click="confirmarEGerar"
           >
             <svg
               width="14"

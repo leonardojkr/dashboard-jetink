@@ -6,6 +6,21 @@ import type { TipoMapa } from '@/stores/useMapaFiltroStore'
 
 export type KpiStatKey = 'total' | 'novos' | 'recorrentes' | 'revendedoresAtivos' | 'estadosAlcancados'
 
+export interface KpiMetadata {
+  statKey: KpiStatKey
+  statusFixo?: StatusFiltro
+}
+
+export const KPI_METADATA: Record<string, KpiMetadata> = {
+  'Total Atendimentos':       { statKey: 'total',              statusFixo: 'Todos' },
+  'Novos Clientes':           { statKey: 'novos',              statusFixo: 'Todos' },
+  'Novos Atendimentos':       { statKey: 'novos' },
+  'Recorrentes':              { statKey: 'recorrentes',        statusFixo: 'Todos' },
+  'Atendimentos Recorrentes': { statKey: 'recorrentes' },
+  'Revendedores Ativos':      { statKey: 'revendedoresAtivos' },
+  'Estados Alcançados':       { statKey: 'estadosAlcancados' },
+}
+
 export interface KpiRelatorioConfig {
   id: string
   label: string
@@ -13,6 +28,9 @@ export interface KpiRelatorioConfig {
   statKey: KpiStatKey
   incluido: boolean
   filtro: AtendimentoFiltro
+  statusFixo?: StatusFiltro
+  sub: string
+  badge?: Kpi['badge']
 }
 
 export interface SecaoVisualConfig {
@@ -24,26 +42,17 @@ export interface SecaoVisualConfig {
   tipoMapa?: TipoMapa
 }
 
-export const KPI_LABEL_TO_STAT: Record<string, KpiStatKey> = {
-  'Total Atendimentos': 'total',
-  'Novos Clientes': 'novos',
-  'Novos Atendimentos': 'novos',
-  'Recorrentes': 'recorrentes',
-  'Atendimentos Recorrentes': 'recorrentes',
-  'Revendedores Ativos': 'revendedoresAtivos',
-  'Estados Alcançados': 'estadosAlcancados',
-}
-
 type SecaoBase = Omit<SecaoVisualConfig, 'filtro'>
 
 const SECOES_BASE: SecaoBase[] = [
-  { id: 'mapa', label: 'Mapa', incluido: true },
   { id: 'ranking', label: 'TOP 5 Revendedores', incluido: true },
   { id: 'donut', label: 'Novo vs Recorrente', incluido: true, statusFixo: 'Todos' },
   { id: 'weekday', label: 'Atendimentos por Dia da Semana', incluido: true },
   { id: 'interestaduais', label: 'Interestaduais', incluido: true },
   { id: 'impressoras', label: 'Impressoras', incluido: true },
   { id: 'programas', label: 'Programas', incluido: true },
+  { id: 'estadosRevenda', label: 'Est. Revenda (Top 3)', incluido: true },
+  { id: 'estadosSubli',   label: 'Est. Sublimador (Top 3)', incluido: true },
 ]
 
 export const useRelatorioStore = defineStore('relatorio', () => {
@@ -53,6 +62,7 @@ export const useRelatorioStore = defineStore('relatorio', () => {
   const kpisParaImprimir = ref<Kpi[] | null>(null)
   const printFiltros = ref<Record<string, AtendimentoFiltro> | null>(null)
   const printTipoMapa = ref<TipoMapa | null>(null)
+  const printPeriodo = ref<string | null>(null)
 
   function abrirModal(configs: KpiRelatorioConfig[], filtroGlobal: AtendimentoFiltro, tipoMapaAtual: TipoMapa) {
     kpisConfig.value = configs
@@ -62,7 +72,6 @@ export const useRelatorioStore = defineStore('relatorio', () => {
         ...filtroGlobal,
         ...(s.statusFixo ? { status: s.statusFixo } : {}),
       },
-      ...(s.id === 'mapa' ? { tipoMapa: tipoMapaAtual } : {}),
     }))
     modalAberto.value = true
   }
@@ -95,6 +104,18 @@ export const useRelatorioStore = defineStore('relatorio', () => {
     printTipoMapa.value = null
   }
 
+  function setPrintPeriodo(periodo: string) {
+    printPeriodo.value = periodo
+  }
+
+  function clearPrintPeriodo() {
+    printPeriodo.value = null
+  }
+
+  function clearSecoesConfig() {
+    secoesConfig.value = []
+  }
+
   return {
     modalAberto,
     kpisConfig,
@@ -102,6 +123,7 @@ export const useRelatorioStore = defineStore('relatorio', () => {
     kpisParaImprimir,
     printFiltros,
     printTipoMapa,
+    printPeriodo,
     abrirModal,
     fecharModal,
     setKpisParaImprimir,
@@ -110,5 +132,8 @@ export const useRelatorioStore = defineStore('relatorio', () => {
     clearPrintFiltros,
     setPrintTipoMapa,
     clearPrintTipoMapa,
+    setPrintPeriodo,
+    clearPrintPeriodo,
+    clearSecoesConfig,
   }
 })

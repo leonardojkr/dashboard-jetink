@@ -13,6 +13,12 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/pages/Dashboard/DashboardPage.vue'),
         meta: { title: 'Dashboard JETINK' },
       },
+      {
+        path: 'relatorio',
+        name: 'relatorio',
+        component: () => import('@/pages/Relatorio/RelatorioPage.vue'),
+        meta: { title: 'Relatório JETINK' },
+      },
     ],
   },
   {

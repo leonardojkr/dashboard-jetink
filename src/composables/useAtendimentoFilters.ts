@@ -25,7 +25,7 @@ export function useAtendimentoFilters() {
   })
 
   const podeGerarRelatorio = computed(
-    () => filtro.value.ano !== 'Todos' || filtro.value.mes !== 'Todos',
+    () => filtro.value.mes !== 'Todos',
   )
 
   return {

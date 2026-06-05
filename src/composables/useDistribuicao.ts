@@ -20,11 +20,15 @@ export function useDistribuicao(limit = 3) {
   const filtroImpressoras = computed(() => relatorioStore.printFiltros?.['impressoras'] ?? filtroGlobal.value)
   const filtroInterestaduais = computed(() => relatorioStore.printFiltros?.['interestaduais'] ?? filtroGlobal.value)
   const filtroWeekday = computed(() => relatorioStore.printFiltros?.['weekday'] ?? filtroGlobal.value)
+  const filtroEstadosRevenda = computed(() => relatorioStore.printFiltros?.['estadosRevenda'] ?? filtroGlobal.value)
+  const filtroEstadosSubli = computed(() => relatorioStore.printFiltros?.['estadosSubli'] ?? filtroGlobal.value)
 
   const { atendimentos: atProgramas } = useAtendimentos(filtroProgramas)
   const { atendimentos: atImpressoras } = useAtendimentos(filtroImpressoras)
   const { atendimentos: atInterestaduais } = useAtendimentos(filtroInterestaduais)
   const { atendimentos: atWeekday } = useAtendimentos(filtroWeekday)
+  const { atendimentos: atEstadosRevenda } = useAtendimentos(filtroEstadosRevenda)
+  const { atendimentos: atEstadosSubli } = useAtendimentos(filtroEstadosSubli)
 
   const programas = computed<GroupEntry[]>(
     () => groupBy(atProgramas.value, 'programa').slice(0, limit),
@@ -56,5 +60,25 @@ export function useDistribuicao(limit = 3) {
     return WEEKDAYS_PT.map((label, i) => ({ label, total: counts[i] }))
   })
 
-  return { programas, impressoras, interestaduais, weekday }
+  const estadosRevenda = computed<GroupEntry[]>(() =>
+    groupBy(
+      atEstadosRevenda.value.filter((a) => !!a.estadoUf),
+      'estadoUf',
+    ).slice(0, limit),
+  )
+
+  const estadosSubli = computed<GroupEntry[]>(() => {
+    const map = new Map<string, number>()
+    for (const a of atEstadosSubli.value) {
+      const uf = resolveToUF(a.estado)
+      if (!uf) continue
+      map.set(uf, (map.get(uf) ?? 0) + 1)
+    }
+    return [...map.entries()]
+      .map(([key, total]) => ({ key, total }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, limit)
+  })
+
+  return { programas, impressoras, interestaduais, weekday, estadosRevenda, estadosSubli }
 }

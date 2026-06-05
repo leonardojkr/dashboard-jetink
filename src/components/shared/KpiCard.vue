@@ -38,18 +38,18 @@ const animationStyle = computed(() => ({
 
 <template>
   <div
-    class="relative bg-bg-card border border-border rounded-[14px] p-[22px] overflow-hidden transition-all hover:-translate-y-0.5 hover:border-border-light hover:shadow-card animate-fade-up"
+    class="relative bg-bg-card border border-border rounded-[14px] p-[18px] overflow-hidden transition-all hover:-translate-y-0.5 hover:border-border-light hover:shadow-card animate-fade-up"
     :style="animationStyle"
   >
     <div :class="['absolute top-0 inset-x-0 h-[3px] rounded-t-[14px]', barClass]" />
-    <div class="text-[11px] uppercase tracking-[1.5px] text-text-muted font-semibold mb-3">
+    <div class="text-[10px] uppercase tracking-[1px] text-text-muted font-semibold mb-2 whitespace-nowrap">
       {{ kpi.label }}
     </div>
-    <div :class="['font-mono text-[32px] font-bold leading-none mb-1.5', valueClass]">
+    <div :class="['font-mono text-[28px] font-bold leading-none mb-1', valueClass]">
       {{ kpi.value }}
     </div>
-    <div class="text-xs text-text-muted flex items-center gap-1">
-      <span v-if="kpi.badge" :class="['inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold', badgeClass]">
+    <div class="text-[11px] text-text-muted flex items-center gap-1">
+      <span v-if="kpi.badge" :class="['inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold', badgeClass]">
         {{ kpi.badge.text }}
       </span>
       <span>{{ kpi.sub }}</span>

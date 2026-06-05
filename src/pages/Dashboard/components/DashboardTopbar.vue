@@ -5,7 +5,7 @@ import { useAtendimentosStore } from '@/stores/useAtendimentosStore'
 import { useAtendimentoFilters } from '@/composables/useAtendimentoFilters'
 import { useExcelUpload } from '@/composables/useExcelUpload'
 import { useKpis } from '@/composables/useKpis'
-import { useRelatorioStore, KPI_LABEL_TO_STAT } from '@/stores/useRelatorioStore'
+import { useRelatorioStore, KPI_METADATA, type KpiRelatorioConfig } from '@/stores/useRelatorioStore'
 import { useMapaFiltroStore } from '@/stores/useMapaFiltroStore'
 
 const { nomeArquivo } = storeToRefs(useAtendimentosStore())
@@ -16,14 +16,24 @@ const relatorioStore = useRelatorioStore()
 const { tipo: tipoMapa } = storeToRefs(useMapaFiltroStore())
 
 function abrirModal(): void {
-  const configs = kpis.value.map((kpi) => ({
-    id: kpi.label.toLowerCase().replace(/\s+/g, '_'),
-    label: kpi.label,
-    color: kpi.color,
-    statKey: KPI_LABEL_TO_STAT[kpi.label] ?? 'total',
-    incluido: true,
-    filtro: { ...filtro.value },
-  }))
+  const configs: KpiRelatorioConfig[] = kpis.value.map((kpi) => {
+    const meta = KPI_METADATA[kpi.label]
+    const config: KpiRelatorioConfig = {
+      id: kpi.label.toLowerCase().replace(/\s+/g, '_'),
+      label: kpi.label,
+      color: kpi.color,
+      statKey: meta?.statKey ?? 'total',
+      incluido: true,
+      sub: kpi.sub,
+      badge: kpi.badge,
+      filtro: {
+        ...filtro.value,
+        status: meta?.statusFixo ?? filtro.value.status,
+      },
+    }
+    if (meta?.statusFixo !== undefined) config.statusFixo = meta.statusFixo
+    return config
+  })
   relatorioStore.abrirModal(configs, { ...filtro.value }, tipoMapa.value)
 }
 </script>
