@@ -64,7 +64,7 @@ export const useRelatorioStore = defineStore('relatorio', () => {
   const printTipoMapa = ref<TipoMapa | null>(null)
   const printPeriodo = ref<string | null>(null)
 
-  function abrirModal(configs: KpiRelatorioConfig[], filtroGlobal: AtendimentoFiltro, tipoMapaAtual: TipoMapa) {
+  function abrirModal(configs: KpiRelatorioConfig[], filtroGlobal: AtendimentoFiltro, _tipoMapaAtual: TipoMapa) {
     kpisConfig.value = configs
     secoesConfig.value = SECOES_BASE.map((s) => ({
       ...s,

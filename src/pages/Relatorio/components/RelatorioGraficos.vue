@@ -11,7 +11,7 @@ import RelatorioPrintCard from './RelatorioPrintCard.vue'
 
 const relatorioStore = useRelatorioStore()
 
-const { top, titulo, totalRevendedores, mostrarDetalhe } = useRanking(5)
+const { top, titulo, mostrarDetalhe } = useRanking(5)
 const { donutOption: donutOptionBase, donutData, weekdayOption: weekdayOptionBase } = useGraficosResumo()
 
 const donutOption = computed<EChartsOption | null>(() => {
