@@ -57,11 +57,6 @@ function statusToLabel(status: StatusFiltro): string | null {
   return status === 'Novo' ? 'Novos' : 'Recorrentes'
 }
 
-function countByStatus(rows: Atendimento[], status: StatusFiltro): number {
-  if (status === 'Todos') return rows.length
-  return rows.filter((r) => r.status === status).length
-}
-
 function makeTooltipFormatter(statusLabel: string | null, lookup?: SeriesDataLookup, firstIndexPrev?: Record<string, number | null>) {
   return (params: unknown) => {
     const list = (Array.isArray(params) ? params : [params]) as TooltipParam[]
@@ -152,9 +147,19 @@ export function useEvolucao() {
 }
 
 function buildAllMonthsLine(all: Atendimento[], status: StatusFiltro): EvolutionResult {
-  const monthsSet = new Set<string>()
-  for (const a of all) monthsSet.add(a.ym)
-  const months = [...monthsSet].sort()
+  // Varredura única: acumula novos/recorrentes por mês num só passo (era
+  // O(meses × n) com um `all.filter` por mês dentro do loop).
+  const buckets = new Map<string, { novos: number; recorrentes: number }>()
+  for (const a of all) {
+    let b = buckets.get(a.ym)
+    if (!b) {
+      b = { novos: 0, recorrentes: 0 }
+      buckets.set(a.ym, b)
+    }
+    if (a.status === 'Novo') b.novos++
+    else b.recorrentes++
+  }
+  const months = [...buckets.keys()].sort()
 
   const labels: string[] = []
   const totais: number[] = []
@@ -164,13 +169,11 @@ function buildAllMonthsLine(all: Atendimento[], status: StatusFiltro): Evolution
   for (const ym of months) {
     const [year, month] = ym.split('-')
     const monthIdx = parseInt(month, 10) - 1
-    const rows = all.filter((a) => a.ym === ym)
-    const n = rows.filter((a) => a.status === 'Novo').length
-    const r = rows.filter((a) => a.status === 'Recorrente').length
+    const b = buckets.get(ym)!
     labels.push(`${MONTH_NAMES[monthIdx]}/${year.slice(2)}`)
-    novos.push(n)
-    recorrentes.push(r)
-    totais.push(n + r)
+    novos.push(b.novos)
+    recorrentes.push(b.recorrentes)
+    totais.push(b.novos + b.recorrentes)
   }
 
   let hasMultipleYears = false
@@ -215,13 +218,26 @@ function buildAllMonthsLine(all: Atendimento[], status: StatusFiltro): Evolution
 
 function buildYearLine(all: Atendimento[], year: string, status: StatusFiltro): EvolutionResult {
   const prevYear = previousYear(year)
-  const hasPrev = all.some((a) => a.year === prevYear)
+
+  // Varredura única dos dois anos. `present` marca meses com qualquer registro;
+  // `counts` acumula só os do status filtrado (0 = mês existe sem aquele status,
+  // null = mês ausente). Era O(24 × n) com um `all.filter` por mês × ano.
+  const present = new Set<string>()
+  const counts = new Map<string, number>()
+  let hasPrev = false
+  for (const a of all) {
+    if (a.year !== year && a.year !== prevYear) continue
+    if (a.year === prevYear) hasPrev = true
+    present.add(a.ym)
+    if (status === 'Todos' || a.status === status) {
+      counts.set(a.ym, (counts.get(a.ym) ?? 0) + 1)
+    }
+  }
 
   function monthCount(y: string, monthIdx0: number): number | null {
     const ym = buildYm(y, monthIdx0)
-    const rows = all.filter((a) => a.ym === ym)
-    if (!rows.length) return null
-    return countByStatus(rows, status)
+    if (!present.has(ym)) return null
+    return counts.get(ym) ?? 0
   }
 
   const curVals: (number | null)[] = []
@@ -277,17 +293,16 @@ function buildBarComparison(all: Atendimento[], year: string, ym: string, status
   const monthIdx = parseInt(ym.split('-')[1], 10) - 1
   const mLabel = MONTH_NAMES[monthIdx]
 
-  function bucket(targetYm: string) {
-    const rows = all.filter((a) => a.ym === targetYm)
-    return {
-      novos: rows.filter((a) => a.status === 'Novo').length,
-      recorrentes: rows.filter((a) => a.status === 'Recorrente').length,
-      hasData: rows.length > 0,
-    }
+  // Varredura única: acumula mês atual e mesmo mês do ano anterior de uma vez.
+  const cur = { novos: 0, recorrentes: 0, hasData: false }
+  const prev = { novos: 0, recorrentes: 0, hasData: false }
+  for (const a of all) {
+    const target = a.ym === ym ? cur : a.ym === prevYm ? prev : null
+    if (!target) continue
+    target.hasData = true
+    if (a.status === 'Novo') target.novos++
+    else target.recorrentes++
   }
-
-  const cur = bucket(ym)
-  const prev = bucket(prevYm)
 
   const labels = [`${mLabel} ${year}`, `${mLabel} ${prevYear}`]
   const novosData = [cur.novos, prev.novos]

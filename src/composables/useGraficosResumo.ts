@@ -1,10 +1,8 @@
 import { computed } from 'vue'
 import type { EChartsOption } from 'echarts'
-import { storeToRefs } from 'pinia'
 import { useAtendimentos } from './useAtendimentos'
 import { useDistribuicao } from './useDistribuicao'
-import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
-import { useRelatorioStore } from '@/stores/useRelatorioStore'
+import { usePrintFiltro } from './usePrintFiltro'
 import {
   CHART_COLORS,
   chartBase,
@@ -15,16 +13,16 @@ import {
 } from '@/utils/chartTheme'
 
 export function useGraficosResumo() {
-  const { filtro: filtroGlobal } = storeToRefs(useFiltrosAtendimentoStore())
-  const relatorioStore = useRelatorioStore()
-
-  const filtroDonut = computed(() => relatorioStore.printFiltros?.['donut'] ?? filtroGlobal.value)
-  const { atendimentos } = useAtendimentos(filtroDonut)
+  const { atendimentos } = useAtendimentos(usePrintFiltro('donut'))
   const { weekday } = useDistribuicao()
 
   const donutData = computed(() => {
-    const novos = atendimentos.value.filter((a) => a.status === 'Novo').length
-    const rec = atendimentos.value.filter((a) => a.status === 'Recorrente').length
+    let novos = 0
+    let rec = 0
+    for (const a of atendimentos.value) {
+      if (a.status === 'Novo') novos++
+      else rec++
+    }
     return { novos, rec, total: novos + rec }
   })
 

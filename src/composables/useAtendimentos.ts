@@ -5,6 +5,13 @@ import { useAtendimentosStore } from '@/stores/useAtendimentosStore'
 import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
 import type { Atendimento, AtendimentoFiltro } from '@/types/Atendimento'
 
+export function matchFiltro(a: Atendimento, filtro: AtendimentoFiltro): boolean {
+  const { ano, mes, status } = filtro
+  return (ano === 'Todos' || a.year === ano)
+    && (mes === 'Todos' || a.ym === mes)
+    && (status === 'Todos' || a.status === status)
+}
+
 export function useAtendimentos(filtroOverride?: Ref<AtendimentoFiltro> | ComputedRef<AtendimentoFiltro>) {
   const atendimentosStore = useAtendimentosStore()
   const filtrosStore = useFiltrosAtendimentoStore()
@@ -13,15 +20,9 @@ export function useAtendimentos(filtroOverride?: Ref<AtendimentoFiltro> | Comput
 
   const filtroAtivo = computed<AtendimentoFiltro>(() => filtroOverride?.value ?? filtro.value)
 
-  const filtrados = computed<Atendimento[]>(() => {
-    const { ano, mes, status } = filtroAtivo.value
-    return atendimentos.value.filter((a) => {
-      const okAno = ano === 'Todos' || a.year === ano
-      const okMes = mes === 'Todos' || a.ym === mes
-      const okStatus = status === 'Todos' || a.status === status
-      return okAno && okMes && okStatus
-    })
-  })
+  const filtrados = computed<Atendimento[]>(() =>
+    atendimentos.value.filter((a) => matchFiltro(a, filtroAtivo.value)),
+  )
 
   return {
     atendimentos: filtrados,

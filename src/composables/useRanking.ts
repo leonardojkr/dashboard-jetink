@@ -1,15 +1,10 @@
 import { computed } from 'vue'
-import { storeToRefs } from 'pinia'
 import { useAtendimentos } from './useAtendimentos'
-import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
-import { useRelatorioStore } from '@/stores/useRelatorioStore'
+import { usePrintFiltro } from './usePrintFiltro'
 import { groupByDetail } from '@/utils/grouping'
 
 export function useRanking(limit = 5) {
-  const { filtro: filtroGlobal } = storeToRefs(useFiltrosAtendimentoStore())
-  const relatorioStore = useRelatorioStore()
-
-  const filtroAtivo = computed(() => relatorioStore.printFiltros?.['ranking'] ?? filtroGlobal.value)
+  const filtroAtivo = usePrintFiltro('ranking')
   const { atendimentos } = useAtendimentos(filtroAtivo)
 
   const todos = computed(() => groupByDetail(atendimentos.value, 'revendedor'))

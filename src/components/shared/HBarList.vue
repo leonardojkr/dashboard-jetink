@@ -23,7 +23,7 @@ const max = computed(() => props.items[0]?.total ?? 1)
     <li
       v-for="item in items"
       :key="item.key"
-      :class="['grid items-center', compact ? 'grid-cols-[34px_1fr_20px] gap-1' : 'grid-cols-[120px_1fr_50px] gap-3']"
+      :class="['grid items-center', compact ? 'grid-cols-[34px_1fr_20px] gap-1' : 'grid-cols-[92px_1fr_34px] gap-2.5']"
     >
       <span :class="['font-medium text-text-secondary truncate', compact ? 'text-[10px]' : 'text-[13px]']">{{ item.key }}</span>
       <div class="h-2 bg-bg-elevated rounded-md overflow-hidden">

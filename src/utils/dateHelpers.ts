@@ -11,10 +11,6 @@ export function formatMonth(ym: string): string {
   return `${MONTH_NAMES[idx]}`
 }
 
-export function monthLabel(monthIndex: number): string {
-  return MONTH_NAMES[monthIndex] ?? ''
-}
-
 export function buildYm(year: string, monthIndex0: number): string {
   const mm = String(monthIndex0 + 1).padStart(2, '0')
   return `${year}-${mm}`

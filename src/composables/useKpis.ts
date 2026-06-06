@@ -29,26 +29,28 @@ export interface RawStats {
 
 export function computeRawStats(data: Atendimento[], tipoMapa: TipoMapa): RawStats {
   const total = data.length
-  const novos = data.filter((a) => a.status === 'Novo').length
-  const recorrentes = data.filter((a) => a.status === 'Recorrente').length
+  let novos = 0
+  let recorrentes = 0
 
   const diasUnicos = new Set<string>()
   const revendedoresUnicos = new Set<string>()
   const estadosUnicos = new Set<string>()
   const modoRevenda = tipoMapa === 'revenda'
 
+  // Varredura única: status, dias, revendedores e estados de uma só vez.
   for (const a of data) {
+    if (a.status === 'Novo') novos++
+    else recorrentes++
+
     diasUnicos.add(a.iso)
     if (a.revendedor && a.revendedor !== '--' && a.revendedor !== 'Brinde') revendedoresUnicos.add(a.revendedor)
 
     if (modoRevenda) {
       const nome = a.estadoNome
       if (nome && nome !== '--' && ESTADOS_VALIDOS.has(nome)) estadosUnicos.add(nome)
-    } else {
-      if (a.estado) {
-        const nome = resolverNomeEstado(a.estado)
-        if (nome) estadosUnicos.add(nome)
-      }
+    } else if (a.estado) {
+      const nome = resolverNomeEstado(a.estado)
+      if (nome) estadosUnicos.add(nome)
     }
   }
 

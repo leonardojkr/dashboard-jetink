@@ -24,16 +24,27 @@ Camada intermediária entre stores e componentes. Componente nunca toca o store 
 ## Mapa de dependências
 
 ```
-useAtendimentos          ← porta única para dados filtrados
-    ├── useKpis
-    ├── useRanking
-    ├── useDistribuicao  ← usado por useGraficosResumo (weekday)
-    └── useGraficosResumo
+usePrintFiltro(secao)    ← resolve printFiltros[secao] ?? filtroGlobal
+                            (uma instância por seção de relatório)
+
+useAtendimentos(filtro?) ← porta única para dados filtrados; aceita filtroOverride
+    ├── useKpis           (filtro global)
+    ├── useRanking        (filtro via usePrintFiltro('ranking'))
+    ├── useDistribuicao   (6 seções, cada uma via usePrintFiltro)
+    │      └── weekday reusado por useGraficosResumo
+    └── useGraficosResumo (filtro via usePrintFiltro('donut'))
 
 useEvolucao              ← exceção: usa storeToRefs(useAtendimentosStore()) direto
 useAtendimentoFilters    ← wrapper de useFiltrosAtendimentoStore para a UI
 useExcelUpload           ← orquestra ambos os stores (único com side effect)
 ```
+
+**Mecanismo de filtro do relatório**: no Dashboard `printFiltros === null`, então
+`usePrintFiltro` cai sempre no filtro global. No modo relatório, o `RelatorioModal`
+grava `printFiltros` como `Record<secaoId, AtendimentoFiltro>` e cada seção lê o seu.
+As chaves passadas a `usePrintFiltro(secao)` **devem casar** com os `id` de
+`SECOES_BASE` em `useRelatorioStore` (ranking, donut, weekday, interestaduais,
+impressoras, programas, estadosRevenda, estadosSubli).
 
 ---
 
@@ -76,6 +87,12 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 - `stats.estadosAlcancados`: conta valores únicos de `a.estado` (campo livre, não `estadoUf`).
 - `stats.mediaPorDia`: `total / diasUnicos.size`. Zero se nenhum dia único.
 
+### `usePrintFiltro(secao)`
+- Retorna `computed<AtendimentoFiltro>`: `relatorioStore.printFiltros?.[secao] ?? filtroGlobal`.
+- Primitiva única para "qual filtro esta seção usa", usada por `useRanking`, `useDistribuicao` e `useGraficosResumo`.
+- Substitui o padrão antes duplicado (`printFiltros?.['x'] ?? filtroGlobal.value`) em ~8 pontos.
+- A chave `secao` deve ser um `id` de `SECOES_BASE` (ver `useRelatorioStore`).
+
 ### `useEvolucao`
 - **Exceção à regra**: usa `storeToRefs(useAtendimentosStore())` diretamente — dataset completo sem filtro, para poder comparar com ano anterior.
 - Retorna: `{ resultado: computed<EvolutionResult> }`.
@@ -90,28 +107,34 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 - `EvolutionResult`: `{ mode, option: EChartsOption | null, tag: string | null, hasData: boolean }`.
 - Filtro `status` afeta quais séries aparecem (Novo/Recorrente/ambos).
 - Cores vêm de `STATUS_COLOR` em `chartTheme.ts`.
-- Helpers internos puros: `statusToLabel`, `countByStatus`, `makeTooltipFormatter`, `evolutionBase`, `categoryAxis`, `valueAxis`, `lineSeries`.
+- Helpers internos puros: `statusToLabel`, `makeTooltipFormatter`, `evolutionBase`, `categoryAxis`, `valueAxis`, `lineSeries`.
+- **Agregação single-pass**: os três modos bucketizam o dataset por `ym` numa única varredura (Map por mês), sem `all.filter` por mês dentro de loop.
 
 ### `useGraficosResumo`
-- Usa `useAtendimentos()` (filtrado) + `useDistribuicao().weekday`.
+- Usa `useAtendimentos(usePrintFiltro('donut'))` + `useDistribuicao().weekday`.
 - Retorna: `donutData`, `donutOption`, `weekdayOption`.
+- `donutData`: conta Novo/Recorrente numa única varredura.
 - `donutOption`: `EChartsOption | null`. `null` se `total === 0`. Renderiza PieChart Novo vs Recorrente com label central no donut.
 - `weekdayOption`: sempre retorna `EChartsOption` (nunca null). BarChart Seg→Sex com gradiente accent.
 - Tema/cores vêm de `chartTheme.ts` (`chartBase`, `chartTooltip`, `CHART_COLORS`, helpers de eixo).
 
 ### `useRanking(limit = 5)`
-- Usa `useAtendimentos()` (filtrado).
+- Usa `useAtendimentos(usePrintFiltro('ranking'))`.
 - Agrupa por `revendedor` via `groupByDetail` (com breakdown Novo/Recorrente).
 - Retorna: `top` (slice(0, limit)), `titulo`, `totalRevendedores`, `mostrarDetalhe`.
 - `mostrarDetalhe`: `filtro.status === 'Todos'` — oculta breakdown quando há filtro de status.
 - `titulo`: muda conforme `filtro.status` ("conversão" / "recorrência" / "atendimento").
 
 ### `useDistribuicao(limit = 3)`
-- Usa `useAtendimentos()` (filtrado).
-- Retorna: `programas`, `impressoras`, `estados`, `weekday`.
-- `programas`, `impressoras`, `estados`: `groupBy` nos campos homônimos de `Atendimento`, top N.
-- **`estados` usa `a.estado` (campo livre)**, não `a.estadoUf`. Para choropleth usar `estadoUf`/`estadoNome`.
+- Cria 6 fatias de dados, cada uma filtrada por `usePrintFiltro(<id>)`.
+- Retorna: `programas`, `impressoras`, `interestaduais`, `weekday`, `estadosRevenda`, `estadosSubli`.
+- `programas`, `impressoras`: `groupBy` nos campos homônimos, top N.
+- `interestaduais`, `estadosSubli`, `estadosRevenda`: `groupByResolver` (Map por UF derivada), top N.
+  - `interestaduais`: conta UF de revenda quando difere da UF do sublimador (ambas resolvíveis).
+  - `estadosSubli`: conta `resolveToUF(a.estado)` (campo livre).
+  - `estadosRevenda`: conta `a.estadoUf` (derivado de "Estado Revenda").
 - `weekday`: conta `a.dow` de 1 (Seg) a 5 (Sex), retorna `WeekdayBucket[]` com labels `WEEKDAYS_PT`.
+- **Lazy**: os 6 `computed` são preguiçosos — só as fatias realmente lidas pelo componente são processadas (Dashboard lê 3; Relatório lê até 5).
 
 ### `useExcelUpload` ⚠️
 - **Único composable com side effect**: chama service, muta stores.
@@ -135,10 +158,11 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 |---|---|
 | `useAtendimentos` | `vue`, `pinia`, stores, `types` |
 | `useAtendimentoFilters` | `vue`, `pinia`, stores |
-| `useKpis` | `useAtendimentos`, `useFiltrosAtendimentoStore` |
-| `useDistribuicao` | `useAtendimentos`, `utils/grouping`, `utils/dateHelpers` |
-| `useRanking` | `useAtendimentos`, `useFiltrosAtendimentoStore`, `utils/grouping` |
-| `useGraficosResumo` | `useAtendimentos`, `useDistribuicao`, `utils/chartTheme` |
+| `usePrintFiltro` | `vue`, `pinia`, `useFiltrosAtendimentoStore`, `useRelatorioStore`, `types` |
+| `useKpis` | `useAtendimentos`, `useFiltrosAtendimentoStore`, `useMapaFiltroStore`, `estadoMap` |
+| `useDistribuicao` | `useAtendimentos`, `usePrintFiltro`, `utils/grouping`, `utils/estadoMap`, `utils/dateHelpers` |
+| `useRanking` | `useAtendimentos`, `usePrintFiltro`, `utils/grouping` |
+| `useGraficosResumo` | `useAtendimentos`, `useDistribuicao`, `usePrintFiltro`, `utils/chartTheme` |
 | `useEvolucao` | `useAtendimentosStore`, `useFiltrosAtendimentoStore`, `utils/dateHelpers`, `utils/chartTheme`, `types` |
 | `useExcelUpload` | `services/atendimentoService`, ambos os stores |
 
@@ -159,6 +183,7 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 | Acoplamento | Risco |
 |---|---|
 | `Kpi` type exportado de `useKpis` → consumido por `KpiCard` | Mover type quebra `KpiCard` |
+| `matchFiltro` exportado de `useAtendimentos` → consumido por `RelatorioModal` (preview KPIs) | Regra de filtro única; divergir quebra paridade dashboard ↔ relatório |
 | `useGraficosResumo` consome `useDistribuicao().weekday` | Remover `weekday` quebra `weekdayOption` |
 | `useEvolucao` ↔ raw store | Adicionar filtro a essa via mascara comparações inter-anuais |
 | `chartTheme` ↔ tokens `@theme` em `style.css` | Divergência silenciosa entre dashboard e gráficos |
@@ -176,7 +201,7 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 
 ## Limitações reais
 
-- **Sem memoização entre composables**: cada um refiltra/reagrega independentemente. Em datasets grandes, duplica trabalho.
+- **Sem memoização entre composables distintos**: cada composable refiltra/reagrega o dataset por conta própria. Dentro de cada composable a agregação já é single-pass; o que não há é cache compartilhado entre `useKpis`, `useRanking`, etc.
 - **Nenhum composable é defensivo**: assumem `Atendimento` bem formado. `mapExcelRows` é a única defesa.
 - **`estadoUf`/`estadoNome` são opcionais**: composables futuros que usarem esses campos devem tratar `undefined`.
 
@@ -184,9 +209,9 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 
 ## Hotspots
 
-- **`useEvolucao` filtra `all` múltiplas vezes** para os mesmos `ym` em modos `'ano'` e `'todos'`. Em datasets grandes, considera-se memoizar por `ym` antes de consumir.
-- **`useKpis.stats`** executa 3 filter passes + sets em sequência. Aceito hoje.
-- **`useDistribuicao` instancia 4 computeds independentes** — um por dimensão. Pequeno duplicate de varredura.
+- **Agregações single-pass** (estado atual): `computeRawStats` (useKpis), `donutData` (useGraficosResumo) e os três modos de `useEvolucao` varrem o dataset uma única vez por avaliação. `groupBy`/`groupByResolver` também são uma varredura + sort.
+- **`useDistribuicao` declara 6 fatias**, mas os `computed` são lazy: só as fatias lidas pelo componente disparam filtragem/agregação.
+- **Custo dominante**: `useAtendimentos.filtrados` reavalia o `.filter` do dataset inteiro quando `atendimentos` ou o filtro mudam. Proporcional a `atendimentos.length`.
 
 ---
 
@@ -205,6 +230,9 @@ useExcelUpload           ← orquestra ambos os stores (único com side effect)
 ## Regras de extensão
 
 - **Derivação de dados filtrados** → consumir `useAtendimentos()`.
+- **Seção que participa do relatório** → resolver o filtro com `usePrintFiltro(<secaoId>)` e passar a `useAtendimentos`. Não reescrever `printFiltros?.[x] ?? filtroGlobal` à mão.
+- **Nova seção de relatório** → adicionar o `id` em `SECOES_BASE` (`useRelatorioStore`) **e** usar o mesmo `id` em `usePrintFiltro` no composable. Os dois lados têm de casar.
+- **Contagem agrupada por chave derivada** (ex.: UF) → `groupByResolver(arr, resolver)`. Por campo direto → `groupBy(arr, campo)`.
 - **Dataset completo (comparações inter-anuais)** → `storeToRefs(useAtendimentosStore())` direto. **Documentar motivo.**
 - **Produz `EChartsOption`** → registrar chart type em `BaseChart.vue use([...])` antes de testar; consumir `chartTheme.ts`.
 - **Lógica de filtro nova** → estender `useAtendimentoFilters` (UI) ou `useAtendimentos` (regra), não duplicar.

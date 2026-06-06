@@ -19,16 +19,31 @@ function normalize(value: unknown): string | null {
   return v
 }
 
-export function groupBy<T>(arr: T[], field: keyof T): GroupEntry[] {
+/**
+ * Agrupa contando ocorrências por chave derivada de cada linha via `resolver`.
+ * Linhas cujo `resolver` retorna null/undefined/'' são ignoradas.
+ * Retorna `GroupEntry[]` ordenado por `total` desc.
+ *
+ * É a primitiva de contagem: `groupBy` e os agrupamentos por UF
+ * (interestaduais, estados) são apenas resolvers diferentes sobre ela.
+ */
+export function groupByResolver<T>(
+  arr: T[],
+  resolver: (row: T) => string | null | undefined,
+): GroupEntry[] {
   const map = new Map<string, number>()
   for (const row of arr) {
-    const key = normalize(row[field])
+    const key = resolver(row)
     if (!key) continue
     map.set(key, (map.get(key) ?? 0) + 1)
   }
   return [...map.entries()]
     .map(([key, total]) => ({ key, total }))
     .sort((a, b) => b.total - a.total)
+}
+
+export function groupBy<T>(arr: T[], field: keyof T): GroupEntry[] {
+  return groupByResolver(arr, (row) => normalize(row[field]))
 }
 
 export function groupByDetail<T extends { status: 'Novo' | 'Recorrente' }>(

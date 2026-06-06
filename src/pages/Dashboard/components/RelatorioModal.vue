@@ -9,6 +9,7 @@ import { useAtendimentosStore } from '@/stores/useAtendimentosStore'
 import { useMapaFiltroStore } from '@/stores/useMapaFiltroStore'
 import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
 import { computeRawStats, type Kpi } from '@/composables/useKpis'
+import { matchFiltro } from '@/composables/useAtendimentos'
 import type { StatusFiltro } from '@/types/Atendimento'
 import { MONTH_NAMES } from '@/utils/dateHelpers'
 
@@ -43,14 +44,8 @@ const periodoLabel = computed(() => {
 })
 
 function filtrarAtendimentos(config: KpiRelatorioConfig) {
-  const { ano, mes } = config.filtro
-  const status = config.statusFixo ?? config.filtro.status
-  return todosAtendimentos.value.filter((a) => {
-    const okAno = ano === 'Todos' || a.year === ano
-    const okMes = mes === 'Todos' || a.ym === mes
-    const okStatus = status === 'Todos' || a.status === status
-    return okAno && okMes && okStatus
-  })
+  const filtro = { ...config.filtro, status: config.statusFixo ?? config.filtro.status }
+  return todosAtendimentos.value.filter((a) => matchFiltro(a, filtro))
 }
 
 const previews = computed(() =>
@@ -94,8 +89,9 @@ const totalCards = computed(
 
 function confirmarEGerar() {
   const kpis = relatorioStore.kpisConfig
-    .filter((c) => c.incluido)
-    .map((c) => buildKpiFromConfig(c, previews.value[relatorioStore.kpisConfig.indexOf(c)]))
+    .map((config, i) => ({ config, preview: previews.value[i] }))
+    .filter(({ config }) => config.incluido)
+    .map(({ config, preview }) => buildKpiFromConfig(config, preview))
 
   relatorioStore.setKpisParaImprimir(kpis)
 

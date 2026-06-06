@@ -111,8 +111,9 @@ v-else
 - Altura padronizada em 180px para equilíbrio visual com o Donut.
 
 ### `DashboardDistribuicao`
-- `useDistribuicao(3)` para `programas`, `impressoras`, `estados`.
-- 3 colunas md. `estados` usa `a.estado` (campo livre), **não** `estadoUf`.
+- `useDistribuicao(3)` para `programas`, `impressoras`, `interestaduais`.
+- 3 colunas md. `interestaduais` = UF de revenda diferente da UF do sublimador.
+- Outras fatias de `useDistribuicao` (`weekday`, `estadosRevenda`, `estadosSubli`) são consumidas pelo relatório, não aqui.
 
 ### `DashboardPrintHeader`
 - `data-print="show"` — só aparece no PDF.
@@ -123,8 +124,11 @@ v-else
 
 ## Print mode
 
+> **Caminho principal do relatório = página dedicada `/relatorio`**, não a impressão in-place descrita abaixo.
+> `DashboardTopbar` "Gerar Relatório" abre `RelatorioModal` → grava `printFiltros`/`kpisParaImprimir` no `useRelatorioStore` → navega para `RelatorioPage` (folha A4). Ver `src/pages/Relatorio/` e a memória do subsistema de relatório. Os toggles `data-print` abaixo seguem válidos para impressão direta do dashboard, mas não são o fluxo do relatório.
+
 ### Ativação
-`DashboardTopbar.imprimir()` → `window.print()`. Botão desabilitado se `!podeGerarRelatorio`.
+`DashboardTopbar` abre o `RelatorioModal` (`relatorioStore.abrirModal`). A impressão real ocorre na `RelatorioPage` via `window.print()`. Botão desabilitado se `!podeGerarRelatorio` (exige um mês selecionado).
 
 ### Regras `@media print` (em `src/style.css`)
 - `@page`: A4 landscape, margens `8mm 10mm`.
