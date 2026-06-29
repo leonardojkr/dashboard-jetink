@@ -26,7 +26,7 @@ const statusTabs: { label: string; value: StatusFiltro }[] = [
 </script>
 
 <template>
-  <div class="flex items-center gap-4 flex-wrap mb-7" data-print="hide">
+  <div class="flex items-center gap-4 flex-wrap" data-print="hide">
     <BaseSelect
       label="Ano"
       :model-value="filtro.ano"

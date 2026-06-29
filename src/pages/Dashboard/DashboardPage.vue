@@ -4,8 +4,8 @@ import { useAtendimentosStore } from '@/stores/useAtendimentosStore'
 import { useFiltrosAtendimentoStore } from '@/stores/useFiltrosAtendimentoStore'
 import DashboardUploadScreen from './components/DashboardUploadScreen.vue'
 import DashboardTopbar from './components/DashboardTopbar.vue'
+import DashboardNavbar from './components/DashboardNavbar.vue'
 import DashboardPrintHeader from './components/DashboardPrintHeader.vue'
-import DashboardFiltros from './components/DashboardFiltros.vue'
 import DashboardKpis from './components/DashboardKpis.vue'
 import DashboardEvolucao from './components/DashboardEvolucao.vue'
 import DashboardRanking from './components/DashboardRanking.vue'
@@ -25,10 +25,10 @@ const { filtro } = storeToRefs(useFiltrosAtendimentoStore())
   <div v-else>
     <RelatorioModal />
     <DashboardTopbar />
+    <DashboardNavbar />
 
-    <main class="max-w-[1480px] mx-auto px-8 pt-7 pb-16">
+    <main class="max-w-[1480px] mx-auto px-8 pt-2 pb-16">
       <DashboardPrintHeader />
-      <DashboardFiltros />
       <DashboardKpis />
       <DashboardEvolucao />
 
