@@ -33,7 +33,7 @@ export function useDashboardActions() {
         badge: kpi.badge,
         filtro: {
           ...filtro.value,
-          status: meta?.statusFixo ?? filtro.value.status,
+          status: meta?.statusFixo ?? meta?.statusDefault ?? filtro.value.status,
         },
       }
       if (meta?.statusFixo !== undefined) config.statusFixo = meta.statusFixo

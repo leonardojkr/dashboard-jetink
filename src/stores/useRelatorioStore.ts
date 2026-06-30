@@ -9,6 +9,7 @@ export type KpiStatKey = 'total' | 'novos' | 'recorrentes' | 'revendedoresAtivos
 export interface KpiMetadata {
   statKey: KpiStatKey
   statusFixo?: StatusFiltro
+  statusDefault?: StatusFiltro
 }
 
 export const KPI_METADATA: Record<string, KpiMetadata> = {
@@ -17,8 +18,8 @@ export const KPI_METADATA: Record<string, KpiMetadata> = {
   'Novos Atendimentos':       { statKey: 'novos' },
   'Recorrentes':              { statKey: 'recorrentes',        statusFixo: 'Todos' },
   'Atendimentos Recorrentes': { statKey: 'recorrentes' },
-  'Revendedores Ativos':      { statKey: 'revendedoresAtivos' },
-  'Estados Alcançados':       { statKey: 'estadosAlcancados' },
+  'Revendedores Ativos':      { statKey: 'revendedoresAtivos', statusDefault: 'Novo' },
+  'Estados Alcançados':       { statKey: 'estadosAlcancados', statusDefault: 'Novo' },
 }
 
 export interface KpiRelatorioConfig {
@@ -42,17 +43,17 @@ export interface SecaoVisualConfig {
   tipoMapa?: TipoMapa
 }
 
-type SecaoBase = Omit<SecaoVisualConfig, 'filtro'>
+type SecaoBase = Omit<SecaoVisualConfig, 'filtro'> & { statusDefault?: StatusFiltro }
 
 const SECOES_BASE: SecaoBase[] = [
-  { id: 'ranking', label: 'TOP 5 Revendedores', incluido: true },
-  { id: 'donut', label: 'Novo vs Recorrente', incluido: true, statusFixo: 'Todos' },
-  { id: 'weekday', label: 'Atendimentos por Dia da Semana', incluido: true },
-  { id: 'interestaduais', label: 'Interestaduais', incluido: true },
-  { id: 'impressoras', label: 'Impressoras', incluido: true },
-  { id: 'programas', label: 'Programas', incluido: true },
-  { id: 'estadosRevenda', label: 'Est. Revenda (Top 3)', incluido: true },
-  { id: 'estadosSubli',   label: 'Est. Sublimador (Top 3)', incluido: true },
+  { id: 'ranking',        label: 'TOP 5 Revendedores',             incluido: true, statusDefault: 'Novo' },
+  { id: 'donut',          label: 'Novo vs Recorrente',             incluido: true, statusFixo: 'Todos' },
+  { id: 'weekday',        label: 'Atendimentos por Dia da Semana', incluido: true, statusDefault: 'Todos' },
+  { id: 'interestaduais', label: 'Interestaduais',                 incluido: true, statusDefault: 'Novo' },
+  { id: 'impressoras',    label: 'Impressoras',                    incluido: true, statusDefault: 'Novo' },
+  { id: 'programas',      label: 'Programas',                      incluido: true, statusDefault: 'Novo' },
+  { id: 'estadosRevenda', label: 'Revenda por Est. (Top 3)',       incluido: true, statusDefault: 'Novo' },
+  { id: 'estadosSubli',   label: 'Sublimador por Est. (Top 3)',    incluido: true, statusDefault: 'Novo' },
 ]
 
 export const useRelatorioStore = defineStore('relatorio', () => {
@@ -66,11 +67,11 @@ export const useRelatorioStore = defineStore('relatorio', () => {
 
   function abrirModal(configs: KpiRelatorioConfig[], filtroGlobal: AtendimentoFiltro, _tipoMapaAtual: TipoMapa) {
     kpisConfig.value = configs
-    secoesConfig.value = SECOES_BASE.map((s) => ({
+    secoesConfig.value = SECOES_BASE.map(({ statusDefault, ...s }) => ({
       ...s,
       filtro: {
         ...filtroGlobal,
-        ...(s.statusFixo ? { status: s.statusFixo } : {}),
+        ...(s.statusFixo ? { status: s.statusFixo } : statusDefault ? { status: statusDefault } : {}),
       },
     }))
     modalAberto.value = true
