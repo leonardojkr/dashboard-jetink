@@ -47,11 +47,11 @@ const gridClass = computed(() => ({
         <HBarList :items="interestaduais" tone="green" compact />
       </RelatorioPrintCard>
 
-      <RelatorioPrintCard v-if="showEstadosRevenda" title="Est. Revenda">
+      <RelatorioPrintCard v-if="showEstadosRevenda" title="Revenda por Est.">
         <HBarList :items="estadosRevenda" tone="cyan" compact />
       </RelatorioPrintCard>
 
-      <RelatorioPrintCard v-if="showEstadosSubli" title="Est. Sublimador">
+      <RelatorioPrintCard v-if="showEstadosSubli" title="Sublimador por Est.">
         <HBarList :items="estadosSubli" tone="green" compact />
       </RelatorioPrintCard>
     </div>
