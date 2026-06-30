@@ -11,6 +11,8 @@ import RelatorioDistribuicao from './components/RelatorioDistribuicao.vue'
 const router = useRouter()
 const relatorioStore = useRelatorioStore()
 
+const tituloOriginal = document.title
+
 function salvarPDF() {
   window.print()
 }
@@ -18,10 +20,13 @@ function salvarPDF() {
 onMounted(() => {
   if (!relatorioStore.kpisParaImprimir) {
     router.replace({ name: 'dashboard' })
+    return
   }
+  document.title = `Atendimento JETINK - ${relatorioStore.printPeriodo ?? 'Relatório'}`
 })
 
 onUnmounted(() => {
+  document.title = tituloOriginal
   relatorioStore.clearKpisParaImprimir()
   relatorioStore.clearPrintFiltros()
   relatorioStore.clearPrintTipoMapa()
